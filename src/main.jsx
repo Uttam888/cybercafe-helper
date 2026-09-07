@@ -3480,6 +3480,21 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
           width: 100%;
         }
 
+        .qrTrustRow span {
+          display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 999px;
+          background: #ffffff; border: 1px solid #e2e8f0; color: #64748b; font-size: 9px; font-weight: 650;
+        }
+        .qrFormIntro, .qrFormSectionHeader {
+          display: flex; align-items: flex-start; gap: 10px; margin-bottom: 11px;
+        }
+        .qrFormSectionHeader { margin-top: 2px; margin-bottom: -2px; }
+        .qrFormStep {
+          width: 25px; height: 25px; flex: 0 0 25px; border-radius: 8px; display: grid; place-items: center;
+          background: #eff6ff; color: #2563eb; font-size: 10px; font-weight: 850;
+        }
+        .qrFormIntro strong, .qrFormSectionHeader strong { display: block; color: #1e293b; font-size: 12px; }
+        .qrFormIntro span, .qrFormSectionHeader span { display: block; margin-top: 2px; color: #94a3b8; font-size: 9px; line-height: 1.45; }
+
         @media (max-width: 600px) {
           .qrCustomerPortal {
             min-height: 100dvh !important;
@@ -3665,7 +3680,10 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
           <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 16, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}><QrCode size={25} /></div>
           <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>CYBERCAFE HELPER</span>
           <h1 style={{ margin: "7px 0 5px", fontSize: 27 }}>{loading ? "Opening café portal…" : workspaceInfo?.name || "Customer Print Portal"}</h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>Upload your documents and send them to this café for printing.</p>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 12, lineHeight: 1.5 }}>Send your documents to this café and collect your prints when they are ready.</p>
+          <div className="qrTrustRow" style={{ marginTop: 12, display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 7 }}>
+            <span>🔒 Files sent securely</span><span>•</span><span>Quick print pickup</span>
+          </div>
         </div>
 
         {!loading && !workspaceInfo && (
@@ -3674,12 +3692,16 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
 
         {workspaceInfo && (
           <form onSubmit={submitJob} className="dashboardCard qrPortalForm" style={{ padding: 20 }}>
+            <div className="qrFormIntro">
+              <div className="qrFormStep">1</div>
+              <div><strong>Your details</strong><span>Tell the café who the print request belongs to.</span></div>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Your name<input className="input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Enter your name" required /></label>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Phone number <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span><input className="input" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="9876543210" inputMode="tel" /></label>
 
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Documents</div>
+                <div className="qrFormSectionHeader"><div className="qrFormStep">2</div><div><strong>Upload documents</strong><span>Choose the files you want this café to print.</span></div></div>
                 <label className="qrUploadBox" style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
                   <Upload size={22} style={{ color: "#2563eb" }} />
                   <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length
@@ -3787,6 +3809,8 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
   </div>
 )}
               </div>
+
+              <div className="qrFormSectionHeader"><div className="qrFormStep">3</div><div><strong>Print settings</strong><span>Choose how you'd like your documents printed.</span></div></div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={{ fontSize: 12, fontWeight: 700 }}>Color<select className="input" value={colorMode} onChange={(e) => setColorMode(e.target.value)}><option value="bw">B&W</option><option value="color">Color</option></select></label>
