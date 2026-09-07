@@ -3413,6 +3413,36 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
             <p style={{ margin: "7px 0 0", color: "#475569", fontSize: 11 }}>{statusMeta.text}</p>
           </div>
 
+          {(() => {
+            const stages = [
+              { key: "pending", label: "Received", icon: "1" },
+              { key: "accepted", label: "Accepted", icon: "2" },
+              { key: "printing", label: "Printing", icon: "3" },
+              { key: "completed", label: "Completed", icon: "4" }
+            ];
+            const order = { pending: 0, accepted: 1, printing: 2, completed: 3 };
+            const currentIndex = order[status] ?? 0;
+            const rejected = status === "rejected";
+
+            return (
+              <div className={`qrTrackingTimeline ${rejected ? "rejected" : ""}`}>
+                {stages.map((stage, index) => {
+                  const done = !rejected && currentIndex >= index;
+                  const current = !rejected && currentIndex === index;
+                  return (
+                    <React.Fragment key={stage.key}>
+                      <div className={`qrTrackingStage ${done ? "done" : ""} ${current ? "current" : ""}`}>
+                        <div className="qrTrackingDot">{done ? <Check size={13} strokeWidth={3} /> : stage.icon}</div>
+                        <span>{stage.label}</span>
+                      </div>
+                      {index < stages.length - 1 && <div className={`qrTrackingLine ${!rejected && currentIndex > index ? "done" : ""}`} />}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {trackedJob?.estimated_price != null && (
             <div style={{ marginTop: 14, padding: 15, borderRadius: 14, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
               <div style={{ color: "#15803d", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Estimated price</div>
@@ -3503,9 +3533,24 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
         .qrUploadMeta { display:flex; justify-content:center; flex-wrap:wrap; gap:6px; margin-top:9px; color:#94a3b8; font-size:8px; }
         .qrSelectedHeader { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:12px 0 7px; }
         .qrSelectedHeader strong { color:#334155; font-size:10px; }
+        .qrTrackingTimeline { display:flex; align-items:flex-start; width:100%; margin-top:16px; padding:4px 2px 2px; }
+        .qrTrackingStage { min-width:58px; flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; color:#94a3b8; font-size:8px; font-weight:700; text-align:center; }
+        .qrTrackingDot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:#e2e8f0; color:#94a3b8; font-size:9px; font-weight:850; border:2px solid #fff; box-shadow:0 0 0 1px #e2e8f0; }
+        .qrTrackingStage.done { color:#166534; }
+        .qrTrackingStage.done .qrTrackingDot { background:#dcfce7; color:#15803d; box-shadow:0 0 0 1px #bbf7d0; }
+        .qrTrackingStage.current { color:#1d4ed8; }
+        .qrTrackingStage.current .qrTrackingDot { background:#dbeafe; color:#2563eb; box-shadow:0 0 0 2px #bfdbfe; }
+        .qrTrackingLine { flex:1; min-width:10px; height:2px; margin:13px 2px 0; background:#e2e8f0; border-radius:99px; }
+        .qrTrackingLine.done { background:#86efac; }
+        .qrTrackingTimeline.rejected .qrTrackingStage:first-child { color:#be123c; }
+        .qrTrackingTimeline.rejected .qrTrackingStage:first-child .qrTrackingDot { background:#ffe4e6; color:#be123c; box-shadow:0 0 0 1px #fecdd3; }
         .qrSelectedHeader button { border:0; background:transparent; color:#64748b; font-size:9px; font-weight:700; cursor:pointer; padding:4px 0; }
         .qrFileTotal { display:flex; justify-content:space-between; gap:8px; margin-top:7px; color:#94a3b8; font-size:8px; }
         @media (max-width: 600px) {
+          .qrTrackingTimeline { margin-top:14px; padding-left:0; padding-right:0; }
+          .qrTrackingStage { min-width:52px; font-size:7px; }
+          .qrTrackingDot { width:27px; height:27px; }
+          .qrTrackingLine { min-width:7px; margin-left:1px; margin-right:1px; }
           .qrCustomerPortal {
             min-height: 100dvh !important;
             padding: 16px 12px 28px !important;
