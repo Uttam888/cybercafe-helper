@@ -3192,6 +3192,12 @@ function PrintJobsPage({ workspace }) {
 }
 
 function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
+  const formatUploadFileSize = (bytes) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
   const [workspaceInfo, setWorkspaceInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [customerName, setCustomerName] = useState("");
@@ -3300,7 +3306,34 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
   const handleFiles = (event) => {
     const selected = Array.from(event.target.files || []);
     setError("");
-    setFiles(selected.slice(0, 10));
+
+    if (!selected.length) return;
+
+    const existingKeys = new Set(
+      files.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+    );
+
+    const newFiles = selected.filter(
+      (file) =>
+        !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
+    );
+
+    const combined = [...files, ...newFiles];
+
+    if (combined.length > 10) {
+      setError("You can upload up to 10 files.");
+    }
+
+    setFiles(combined.slice(0, 10));
+
+    // Allow selecting the same file again after removing it.
+    event.target.value = "";
+  };
+
+  const removeFile = (indexToRemove) => {
+    setFiles((current) =>
+      current.filter((_, index) => index !== indexToRemove)
+    );
   };
 
   const submitJob = async (event) => {
@@ -3427,11 +3460,110 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Documents</div>
                 <label style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
                   <Upload size={22} style={{ color: "#2563eb" }} />
-                  <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected` : "Choose documents"}</strong>
-                  <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files</span>
+                  <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length
+  ? `${files.length} file${files.length > 1 ? "s" : ""} selected`
+  : "Tap to choose documents"}</strong>
+                  <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files · 10 MB each</span>
                   <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFiles} style={{ display: "none" }} />
                 </label>
-                {files.length > 0 && <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>{files.map((file, index) => <div key={`${file.name}-${index}`} style={{ fontSize: 10, color: "#475569", padding: "6px 8px", background: "#f8fafc", borderRadius: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</div>)}</div>}
+                {files.length > 0 && (
+  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 7 }}>
+    {files.map((file, index) => (
+      <div
+        key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 9,
+          padding: "9px 10px",
+          background: "#f8fafc",
+          border: "1px solid #e5eaf0",
+          borderRadius: 10
+        }}
+      >
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            flexShrink: 0,
+            borderRadius: 8,
+            display: "grid",
+            placeItems: "center",
+            background: "#eff6ff",
+            color: "#2563eb"
+          }}
+        >
+          <FileText size={14} />
+        </div>
+
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 750,
+              color: "#334155",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }}
+            title={file.name}
+          >
+            {file.name}
+          </div>
+
+          <div
+            style={{
+              marginTop: 2,
+              fontSize: 9,
+              color: "#94a3b8"
+            }}
+          >
+            {formatUploadFileSize(file.size)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => removeFile(index)}
+          aria-label={`Remove ${file.name}`}
+          style={{
+            width: 30,
+            height: 30,
+            flexShrink: 0,
+            border: "none",
+            borderRadius: 8,
+            background: "#fff1f2",
+            color: "#be123c",
+            cursor: "pointer",
+            fontSize: 17,
+            lineHeight: 1
+          }}
+        >
+          ×
+        </button>
+      </div>
+    ))}
+
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: 2,
+        fontSize: 9,
+        color: "#94a3b8"
+      }}
+    >
+      <span>
+        {files.length} of 10 files selected
+      </span>
+
+      <span>
+        {files.length < 10 ? "You can add more" : "Maximum reached"}
+      </span>
+    </div>
+  </div>
+)}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
