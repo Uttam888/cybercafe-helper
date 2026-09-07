@@ -3897,7 +3897,7 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label style={{ fontSize: 12, fontWeight: 700 }}>Copies<input className="input" type="number" min="1" max="999" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} /></label>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Copies<input className="input" type="number" min="1" max="999" value={copies} onChange={(e) => { const value = e.target.value; if (value === "") { setCopies(""); return; } const number = Number(value); if (Number.isFinite(number)) setCopies(Math.min(999, Math.max(1, number))); }} onBlur={() => { if (copies === "" || !Number.isFinite(Number(copies))) setCopies(1); }} /></label>
                 <label style={{ fontSize: 12, fontWeight: 700 }}>Printing<select className="input" value={duplex ? "duplex" : "single"} onChange={(e) => setDuplex(e.target.value === "duplex")}><option value="single">Single-sided</option><option value="duplex">Duplex</option></select></label>
               </div>
 
