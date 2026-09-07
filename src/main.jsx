@@ -3547,10 +3547,39 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
         .qrSelectedHeader button { border:0; background:transparent; color:#64748b; font-size:9px; font-weight:700; cursor:pointer; padding:4px 0; }
         .qrFileTotal { display:flex; justify-content:space-between; gap:8px; margin-top:7px; color:#94a3b8; font-size:8px; }
         @media (max-width: 600px) {
-          .qrTrackingTimeline { margin-top:14px; padding-left:0; padding-right:0; }
-          .qrTrackingStage { min-width:52px; font-size:7px; }
-          .qrTrackingDot { width:27px; height:27px; }
-          .qrTrackingLine { min-width:7px; margin-left:1px; margin-right:1px; }
+          .qrTrackingTimeline {
+            display:flex;
+            flex-direction:column;
+            align-items:stretch;
+            gap:0;
+            margin-top:16px;
+            padding:4px 2px;
+          }
+          .qrTrackingStage {
+            min-width:0;
+            width:100%;
+            flex:0 0 auto;
+            flex-direction:row;
+            justify-content:flex-start;
+            align-items:center;
+            gap:11px;
+            padding:8px 4px;
+            font-size:10px;
+            text-align:left;
+          }
+          .qrTrackingDot {
+            width:30px;
+            height:30px;
+            flex:0 0 30px;
+          }
+          .qrTrackingLine {
+            flex:0 0 auto;
+            width:2px;
+            min-width:2px;
+            height:14px;
+            margin:0 0 0 18px;
+            border-radius:99px;
+          }
           .qrCustomerPortal {
             min-height: 100dvh !important;
             padding: 16px 12px 28px !important;
