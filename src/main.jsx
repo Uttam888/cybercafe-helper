@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { supabase } from "./lib/supabaseClient";
@@ -54,8 +55,39 @@ import {
   Sparkles,
   LogOut,
   Mail,
-  LockKeyhole
+  LockKeyhole,
+  QrCode,
+  Printer as PrinterIcon,
+  Bell
 } from "lucide-react";
+
+const DEFAULT_PRINT_PRICING = {
+  bwPrice: 2,
+  colorPrice: 10,
+  a3BwPrice: 4,
+  a3ColorPrice: 20,
+  duplexDiscount: 10
+};
+
+const getPrintPricing = (workspace) => ({
+  bwPrice: Number(workspace?.print_bw_price ?? DEFAULT_PRINT_PRICING.bwPrice),
+  colorPrice: Number(workspace?.print_color_price ?? DEFAULT_PRINT_PRICING.colorPrice),
+  a3BwPrice: Number(workspace?.print_a3_bw_price ?? DEFAULT_PRINT_PRICING.a3BwPrice),
+  a3ColorPrice: Number(workspace?.print_a3_color_price ?? DEFAULT_PRINT_PRICING.a3ColorPrice),
+  duplexDiscount: Number(workspace?.print_duplex_discount ?? DEFAULT_PRINT_PRICING.duplexDiscount)
+});
+
+const calculatePrintEstimate = ({ workspace, colorMode, paperSize, copies, duplex, fileCount }) => {
+  const pricing = getPrintPricing(workspace);
+  const base = paperSize === "A3"
+    ? (colorMode === "color" ? pricing.a3ColorPrice : pricing.a3BwPrice)
+    : (colorMode === "color" ? pricing.colorPrice : pricing.bwPrice);
+  const fileUnits = Math.max(0, Number(fileCount) || 0);
+  if (!fileUnits) return 0;
+  const units = fileUnits * Math.max(1, Number(copies) || 1);
+  const discountMultiplier = duplex ? Math.max(0, 1 - Math.min(100, Math.max(0, pricing.duplexDiscount)) / 100) : 1;
+  return Math.max(0, base * units * discountMultiplier);
+};
 
 const services = [
   {
@@ -2117,6 +2149,1321 @@ async function loadRazorpayCheckoutScript() {
   return razorpayScriptPromise;
 }
 
+
+function CafeQRPage({ workspace, businessProfile }) {
+  const workspaceId = workspace?.id || "";
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://cybercafe-helper.vercel.app";
+  const qrUrl = workspaceId
+    ? `${baseUrl}/?workspace=${encodeURIComponent(workspaceId)}&mode=customer`
+    : "";
+
+  const downloadQr = () => {
+    const svg = document.querySelector("#cafe-qr-code svg");
+    if (!svg) return;
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svg);
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${(businessProfile?.businessName || workspace?.name || "cybercafe").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-qr.svg`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const printQr = () => {
+    const printWindow = window.open("", "_blank", "width=700,height=800");
+    if (!printWindow) return;
+
+    const qrMarkup = document.querySelector("#cafe-qr-code")?.innerHTML || "";
+    const businessName = businessProfile?.businessName || workspace?.name || "CyberCafe Helper";
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${businessName} - Customer QR</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-family: Inter, Arial, sans-serif;
+              background: #fff;
+              color: #111827;
+            }
+            .sheet {
+              width: 520px;
+              padding: 42px;
+              text-align: center;
+              border: 1px solid #e5e7eb;
+              border-radius: 20px;
+            }
+            h1 { margin: 0 0 8px; font-size: 28px; }
+            p { margin: 0 0 26px; color: #64748b; font-size: 15px; line-height: 1.5; }
+            .qr { display: flex; justify-content: center; margin: 20px 0 26px; }
+            .scan { font-size: 18px; font-weight: 800; }
+            .url { margin-top: 10px; color: #94a3b8; font-size: 10px; word-break: break-all; }
+            @media print {
+              .sheet { border: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="sheet">
+            <h1>${businessName}</h1>
+            <p>Scan this QR code to open our CyberCafe Helper customer portal.</p>
+            <div class="qr">${qrMarkup}</div>
+            <div class="scan">Scan to continue</div>
+            <div class="url">${qrUrl}</div>
+          </div>
+          <script>
+            window.onload = function () {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  return (
+    <div>
+      <PageHeading
+        eyebrow="CUSTOMER ACCESS"
+        title="My Café QR"
+        subtitle="Give customers a simple way to open your café's CyberCafe Helper portal."
+      />
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(300px, 430px) 1fr",
+        gap: 20,
+        alignItems: "start"
+      }}>
+        <section className="dashboardCard" style={{ padding: 28, textAlign: "center" }}>
+          <div
+            id="cafe-qr-code"
+            style={{
+              display: "inline-flex",
+              padding: 18,
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 18,
+              boxShadow: "0 12px 30px rgba(15,23,42,.06)"
+            }}
+          >
+            {workspaceId ? (
+              <QRCodeSVG
+                value={qrUrl}
+                size={280}
+                level="H"
+                marginSize={4}
+                title={`${businessProfile?.businessName || workspace?.name || "CyberCafe"} customer QR`}
+              />
+            ) : (
+              <div style={{ width: 280, height: 280, display: "grid", placeItems: "center", color: "#94a3b8" }}>
+                Workspace unavailable
+              </div>
+            )}
+          </div>
+
+          <h2 style={{ margin: "20px 0 7px", fontSize: 20 }}>
+            {businessProfile?.businessName || workspace?.name || "My Café"}
+          </h2>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 12, lineHeight: 1.6 }}>
+            Customers can scan this code with their phone camera.
+          </p>
+
+          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+            <button className="secondaryButton" onClick={downloadQr} disabled={!workspaceId}>
+              <Download size={16} />
+              Download QR
+            </button>
+            <button className="primaryButton" onClick={printQr} disabled={!workspaceId}>
+              <FileText size={16} />
+              Print QR
+            </button>
+          </div>
+        </section>
+
+        <section className="dashboardCard" style={{ padding: 24 }}>
+          <span className="sectionEyebrow">HOW IT WORKS</span>
+          <h2 style={{ margin: "7px 0 16px", fontSize: 20 }}>One QR for your café</h2>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {[
+              ["01", "Print or display the QR", "Put it on your reception desk, wall, counter or customer waiting area."],
+              ["02", "Customer scans it", "The QR opens a customer-facing CyberCafe Helper entry point for this workspace."],
+              ["03", "Workspace stays connected", "The QR contains your unique workspace ID, so it always points back to your café."]
+            ].map(([number, title, description]) => (
+              <div key={number} style={{
+                display: "flex",
+                gap: 13,
+                padding: 15,
+                borderRadius: 14,
+                background: "#f8fafc",
+                border: "1px solid #e5e7eb"
+              }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  display: "grid",
+                  placeItems: "center",
+                  background: "#eff6ff",
+                  color: "#2563eb",
+                  fontSize: 11,
+                  fontWeight: 850,
+                  flexShrink: 0
+                }}>{number}</div>
+                <div>
+                  <strong style={{ display: "block", fontSize: 13 }}>{title}</strong>
+                  <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 11, lineHeight: 1.55 }}>{description}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            marginTop: 18,
+            padding: 13,
+            borderRadius: 12,
+            background: "#eff6ff",
+            color: "#1e40af",
+            fontSize: 11,
+            lineHeight: 1.55
+          }}>
+            <strong>QR destination:</strong>
+            <div style={{ marginTop: 5, wordBreak: "break-all", fontFamily: "monospace", fontSize: 10 }}>
+              {qrUrl || "Workspace unavailable"}
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function PrintJobsPage({ workspace }) {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [queueView, setQueueView] = useState("active");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [selectedJobId, setSelectedJobId] = useState(null);
+  const [paymentJob, setPaymentJob] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentStatus, setPaymentStatus] = useState("paid");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [newJobNotice, setNewJobNotice] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("cc_print_notification_sound") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const playNotificationSound = () => {
+    if (!soundEnabled || typeof window === "undefined") return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const now = ctx.currentTime;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      gain.connect(ctx.destination);
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1174, now + 0.12);
+      osc.connect(gain);
+      osc.start(now);
+      osc.stop(now + 0.45);
+      osc.onended = () => ctx.close().catch(() => {});
+    } catch (soundError) {
+      console.warn("Notification sound could not play:", soundError);
+    }
+  };
+  const toggleNotificationSound = () => {
+    setSoundEnabled((current) => {
+      const next = !current;
+      try { localStorage.setItem("cc_print_notification_sound", next ? "on" : "off"); } catch {}
+      if (next) {
+        // This user interaction also unlocks audio in browsers that require it.
+        setTimeout(() => playNotificationSound(), 0);
+      }
+      return next;
+    });
+  };
+  const loadJobs = async () => {
+    if (!workspace?.id) return;
+    setLoading(true);
+    setError("");
+    try {
+      const { data, error: jobsError } = await supabase
+        .from("print_jobs")
+        .select("id, workspace_id, customer_name, customer_phone, status, color_mode, copies, paper_size, duplex, notes, created_at, completed_at, final_amount, payment_method, payment_status, paid_at, payment_note")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: false });
+      if (jobsError) throw jobsError;
+      const jobRows = data || [];
+      if (!jobRows.length) {
+        setJobs([]);
+        return;
+      }
+      const jobIds = jobRows.map((job) => job.id);
+      const { data: fileRows, error: filesError } = await supabase
+        .from("print_job_files")
+        .select("id, print_job_id, file_name, storage_path, file_size, mime_type, created_at")
+        .in("print_job_id", jobIds)
+        .order("created_at", { ascending: true });
+      if (filesError) throw filesError;
+
+      const filesByJob = (fileRows || []).reduce((acc, file) => {
+        if (!acc[file.print_job_id]) acc[file.print_job_id] = [];
+        acc[file.print_job_id].push(file);
+        return acc;
+      }, {});
+
+      setJobs(jobRows.map((job) => ({ ...job, files: filesByJob[job.id] || [] })));
+    } catch (err) {
+      console.error("Print jobs load failed:", err);
+      setError(err?.message || "Could not load print jobs.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadJobs();
+    const timer = setInterval(loadJobs, 15000);
+
+    if (!workspace?.id) {
+      return () => clearInterval(timer);
+    }
+
+    const channel = supabase
+      .channel(`print-jobs-${workspace.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "print_jobs",
+          filter: `workspace_id=eq.${workspace.id}`,
+        },
+        (payload) => {
+          const job = payload?.new;
+          if (!job?.id) return;
+
+          setNewJobNotice({
+            id: job.id,
+            customerName: job.customer_name || "Customer",
+          });
+          playNotificationSound();
+          loadJobs();
+
+          window.setTimeout(() => {
+            setNewJobNotice((current) => current?.id === job.id ? null : current);
+          }, 8000);
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.warn("Print job realtime subscription failed; polling remains active.");
+        }
+      });
+
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [workspace?.id]);
+
+  const updateStatus = async (job, status) => {
+    if (status === "completed") {
+      const estimate = calculatePrintEstimate({
+        workspace,
+        colorMode: job.color_mode,
+        paperSize: job.paper_size,
+        copies: job.copies,
+        duplex: job.duplex,
+        fileCount: job.files?.length || 0
+      });
+      setPaymentJob(job);
+      setPaymentAmount(job.final_amount != null ? String(job.final_amount) : String(estimate || 0));
+      setPaymentMethod(job.payment_method || "cash");
+      setPaymentStatus(job.payment_status || "paid");
+      setPaymentNote(job.payment_note || "");
+      return;
+    }
+    setBusyId(job.id);
+    setError("");
+    try {
+      const payload = { status, updated_at: new Date().toISOString() };
+      if (status === "completed") payload.completed_at = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from("print_jobs")
+        .update(payload)
+        .eq("id", job.id)
+        .eq("workspace_id", workspace.id);
+      if (updateError) throw updateError;
+
+      // Tell the customer tracking page to fetch the latest status immediately.
+      // The customer still validates the real status through the secure RPC.
+      try {
+        const statusChannel = supabase.channel(`print-job-status-${workspace.id}-${job.id}`);
+        await statusChannel.send({
+          type: "broadcast",
+          event: "status_update",
+          payload: { jobId: job.id, status },
+        });
+        supabase.removeChannel(statusChannel);
+      } catch (broadcastError) {
+        console.warn("Customer status broadcast failed; polling remains active.", broadcastError);
+      }
+
+      await loadJobs();
+    } catch (err) {
+      console.error("Print job status update failed:", err);
+      setError(err?.message || "Could not update print job.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const completePrintJobWithPayment = async () => {
+    if (!paymentJob) return;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError("Enter a valid final amount.");
+      return;
+    }
+
+    setBusyId(paymentJob.id);
+    setError("");
+    try {
+      const now = new Date().toISOString();
+      const payload = {
+        status: "completed",
+        updated_at: now,
+        completed_at: now,
+        final_amount: Number(amount.toFixed(2)),
+        payment_method: paymentMethod,
+        payment_status: paymentStatus,
+        paid_at: paymentStatus === "paid" ? now : null,
+        payment_note: paymentNote.trim() || null
+      };
+      const { error: updateError } = await supabase
+        .from("print_jobs")
+        .update(payload)
+        .eq("id", paymentJob.id)
+        .eq("workspace_id", workspace.id);
+      if (updateError) throw updateError;
+
+      try {
+        const statusChannel = supabase.channel(`print-job-status-${workspace.id}-${paymentJob.id}`);
+        await statusChannel.send({
+          type: "broadcast",
+          event: "status_update",
+          payload: { jobId: paymentJob.id, status: "completed" }
+        });
+        supabase.removeChannel(statusChannel);
+      } catch (broadcastError) {
+        console.warn("Customer status broadcast failed; polling remains active.", broadcastError);
+      }
+
+      setPaymentJob(null);
+      await loadJobs();
+    } catch (err) {
+      console.error("Print job completion failed:", err);
+      setError(err?.message || "Could not complete print job.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const downloadFile = async (file) => {
+    try {
+      setBusyId(file.id);
+      setError("");
+
+      const { data, error } = await supabase.functions.invoke("get-print-file-url", {
+        body: { fileId: file.id },
+      });
+
+      if (error) throw error;
+      if (!data?.signedUrl) {
+        throw new Error(data?.error || "Could not create a secure file URL.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error("Print file download failed:", err);
+      setError(err?.message || "Could not open the file.");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const counts = {
+    all: jobs.length,
+    pending: jobs.filter((job) => job.status === "pending").length,
+    accepted: jobs.filter((job) => job.status === "accepted").length,
+    printing: jobs.filter((job) => job.status === "printing").length,
+    completed: jobs.filter((job) => job.status === "completed").length,
+    rejected: jobs.filter((job) => job.status === "rejected").length,
+  };
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayJobs = jobs.filter((job) => new Date(job.created_at).getTime() >= todayStart.getTime());
+  const todayCompleted = todayJobs.filter((job) => job.status === "completed").length;
+  const todayRejected = todayJobs.filter((job) => job.status === "rejected").length;
+  const todayFinished = todayCompleted + todayRejected;
+  const todayCompletionRate = todayJobs.length
+    ? Math.round((todayCompleted / todayJobs.length) * 100)
+    : 0;
+
+  const activeQueueCount = jobs.filter((job) =>
+    ["pending", "accepted", "printing"].includes(job.status)
+  ).length;
+
+  const filteredJobs = jobs.filter((job) => {
+    const isHistoryJob = job.status === "completed" || job.status === "rejected";
+    const matchesView = queueView === "history" ? isHistoryJob : !isHistoryJob;
+    const matchesStatus = queueView === "history"
+      ? (filter === "history" || filter === "all" || job.status === filter)
+      : (filter === "all" || job.status === filter);
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query ||
+      String(job.customer_name || "").toLowerCase().includes(query) ||
+      String(job.customer_phone || "").toLowerCase().includes(query) ||
+      String(job.id || "").toLowerCase().includes(query);
+
+    let matchesDate = true;
+    if (dateFilter !== "all") {
+      const created = new Date(job.created_at);
+      const now = new Date();
+      if (dateFilter === "today") {
+        matchesDate = created.toDateString() === now.toDateString();
+      } else if (dateFilter === "7days") {
+        matchesDate = created.getTime() >= now.getTime() - 7 * 24 * 60 * 60 * 1000;
+      } else if (dateFilter === "30days") {
+        matchesDate = created.getTime() >= now.getTime() - 30 * 24 * 60 * 60 * 1000;
+      }
+    }
+
+    return matchesView && matchesStatus && matchesSearch && matchesDate;
+  });
+  const sortedJobs = [...filteredJobs].sort((a, b) => sortOrder === "oldest" ? new Date(a.created_at) - new Date(b.created_at) : new Date(b.created_at) - new Date(a.created_at));
+  const selectedJob = selectedJobId ? jobs.find((job) => job.id === selectedJobId) : null;
+
+  const statusMeta = {
+    pending: { label: "Pending", bg: "#fff7ed", color: "#c2410c", dot: "#f97316" },
+    accepted: { label: "Accepted", bg: "#eff6ff", color: "#1d4ed8", dot: "#3b82f6" },
+    printing: { label: "Printing", bg: "#f5f3ff", color: "#6d28d9", dot: "#8b5cf6" },
+    completed: { label: "Completed", bg: "#ecfdf5", color: "#047857", dot: "#10b981" },
+    rejected: { label: "Rejected", bg: "#fef2f2", color: "#b91c1c", dot: "#ef4444" },
+  };
+
+  const formatSize = (bytes) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatTime = (value) => {
+    const date = new Date(value);
+    const diff = Math.max(0, Date.now() - date.getTime());
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+    return date.toLocaleDateString();
+  };
+
+  const formatExactTime = (value) => {
+    const date = new Date(value);
+    return date.toLocaleString([], {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", paddingBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "4px 2px 18px" }}>
+        <PageHeading
+          eyebrow="PRINT QUEUE"
+          title="Print Jobs"
+          subtitle={queueView === "history" ? "Review completed and rejected print requests." : "Manage documents submitted through your café QR code."}
+        />
+        <button
+          onClick={toggleNotificationSound}
+          title={soundEnabled ? "Mute notification sound" : "Enable notification sound"}
+          aria-label={soundEnabled ? "Mute notification sound" : "Enable notification sound"}
+          style={{ marginTop: 4, border: "1px solid #dbe4ef", background: "#fff", color: soundEnabled ? "#2563eb" : "#94a3b8", borderRadius: 12, padding: "9px 12px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, fontSize: 10, fontWeight: 800, boxShadow: "0 2px 8px rgba(15,23,42,.04)" }}
+        >
+          {soundEnabled ? "🔊 Sound on" : "🔇 Sound off"}
+        </button>
+      </div>
+
+      <style>{`@media (max-width: 640px) { .printJobsPage { width:100%; overflow-x:hidden; } .printJobsHeader { flex-direction:column; gap:10px !important; } .printJobsHeader > button { margin-top:0 !important; align-self:flex-end; } .printJobsTabs { width:100% !important; display:grid !important; grid-template-columns:1fr 1fr; } .printJobsTabs button { width:100%; padding:10px 8px !important; } .printJobsKpis { grid-template-columns:1fr 1fr !important; gap:8px !important; } .printJobsStatusGrid { grid-template-columns:1fr 1fr !important; gap:8px !important; } .printJobsToolbar { align-items:stretch !important; } .printJobsToolbar > div:last-child { width:100% !important; justify-content:stretch !important; } .printJobsToolbar > div:last-child > div { min-width:0 !important; max-width:none !important; flex:1 1 100% !important; } .printJobsToolbar select, .printJobsToolbar .secondaryButton { flex:1 1 auto; min-height:38px; } .printJobsPage section.dashboardCard > div:first-child { padding:13px 14px !important; } .printJobsPage section.dashboardCard > div:nth-child(2) { padding:12px 14px !important; } .printJobsPage section.dashboardCard h3 { font-size:15px !important; } .printJobFiles > div { align-items:flex-start !important; } .printJobFiles .secondaryButton { padding:8px 10px !important; } .printJobActions { justify-content:stretch !important; } .printJobActions button { flex:1 1 140px; min-height:40px; } }`}</style>
+
+      {newJobNotice && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 18,
+            padding: "13px 15px",
+            borderRadius: 15,
+            background: "linear-gradient(135deg, #eff6ff, #f8fbff)",
+            border: "1px solid #bfdbfe",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            boxShadow: "0 8px 24px rgba(37,99,235,.08)"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 10, display: "grid", placeItems: "center", background: "#dbeafe", color: "#2563eb" }}>
+              <Bell size={17} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 850, color: "#1e3a8a" }}>New print request</div>
+              <div style={{ marginTop: 2, fontSize: 11, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {newJobNotice.customerName} just submitted a print job.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setFilter("pending");
+              setNewJobNotice(null);
+            }}
+            style={{
+              flexShrink: 0, border: "1px solid #93c5fd", background: "#fff", color: "#1d4ed8",
+              borderRadius: 9, padding: "7px 10px", fontSize: 10, fontWeight: 800, cursor: "pointer"
+            }}
+          >
+            View pending
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, padding: 5, background: "#eef2f7", borderRadius: 15, width: "fit-content", maxWidth: "100%", border: "1px solid #e5eaf0" }}>
+        {[
+          ["active", "Active queue", counts.pending + counts.accepted + counts.printing],
+          ["history", "History", counts.completed + counts.rejected],
+        ].map(([key, label, count]) => (
+          <button
+            key={key}
+            onClick={() => {
+              setQueueView(key);
+              setFilter(key === "history" ? "history" : "all");
+            }}
+            style={{
+              border: "none",
+              background: queueView === key ? "#fff" : "transparent",
+              color: queueView === key ? "#0f172a" : "#64748b",
+              borderRadius: 10,
+              padding: "10px 15px",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 800,
+              boxShadow: queueView === key ? "0 2px 8px rgba(15,23,42,.08)" : "none",
+            }}
+          >
+            {label} <span style={{ color: queueView === key ? "#2563eb" : "#94a3b8" }}>({count})</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 20 }}>
+        {[
+          ["Active queue", activeQueueCount, "Jobs waiting or being processed"],
+          ["Submitted today", todayJobs.length, "New requests received today"],
+          ["Completed today", todayCompleted, `${todayCompletionRate}% completion rate`],
+          ["Rejected today", todayRejected, "Requests not processed"]
+        ].map(([label, value, helper]) => (
+          <div
+            key={label}
+            className="dashboardCard"
+            style={{
+              padding: "15px 16px",
+              border: "1px solid #e5eaf0",
+              background: "linear-gradient(180deg, #fff, #fbfcfe)",
+              boxShadow: "0 4px 14px rgba(15,23,42,.035)"
+            }}
+          >
+            <div style={{ color: "#64748b", fontSize: 9, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".55px" }}>
+              {label}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 23, lineHeight: 1.1, fontWeight: 850, color: "#0f172a" }}>
+              {value}
+            </div>
+            <div style={{ marginTop: 4, color: "#94a3b8", fontSize: 9 }}>
+              {helper}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {[
+          ["Pending", counts.pending, "pending"],
+          ["Accepted", counts.accepted, "accepted"],
+          ["Printing", counts.printing, "printing"],
+          ["Completed", counts.completed, "completed"],
+          ["Rejected", counts.rejected, "rejected"],
+        ].map(([label, count, key]) => {
+          const meta = statusMeta[key];
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                if (key === "completed" || key === "rejected") {
+                  setQueueView("history");
+                  setFilter(key);
+                } else {
+                  setQueueView("active");
+                  setFilter(key);
+                }
+              }}
+              style={{
+                textAlign: "left", border: filter === key ? `2px solid ${meta.dot}` : "1px solid #e2e8f0",
+                background: "#fff", borderRadius: 14, padding: "13px 15px", cursor: "pointer",
+                boxShadow: "0 4px 16px rgba(15,23,42,.045)"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 7, color: meta.color, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".5px" }}>
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: meta.dot }} />{label}
+              </div>
+              <div style={{ marginTop: 5, fontSize: 25, fontWeight: 850, color: "#0f172a" }}>{count}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16, padding: "12px 13px", border: "1px solid #e5eaf0", borderRadius: 15, background: "#fbfcfe" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {(queueView === "history" ? ["history", "completed", "rejected"] : ["all", "pending", "accepted", "printing"]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              style={{
+                border: filter === key ? "1px solid #2563eb" : "1px solid #e2e8f0",
+                background: filter === key ? "#eff6ff" : "#fff",
+                color: filter === key ? "#1d4ed8" : "#64748b",
+                borderRadius: 999, padding: "7px 12px", fontSize: 11, fontWeight: 750, cursor: "pointer"
+              }}
+            >
+              {key === "history" ? "All history" : key === "all" ? "All active" : statusMeta[key].label} {key === "history" ? `(${counts.completed + counts.rejected})` : key !== "all" ? `(${counts[key]})` : `(${counts.pending + counts.accepted + counts.printing})`}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: "100%", justifyContent: "flex-end" }}>
+          <div style={{ position: "relative", minWidth: 220, flex: "1 1 260px", maxWidth: 340 }}>
+            <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search customer, phone or job ID"
+              aria-label="Search print jobs"
+              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #dfe6ee", borderRadius: 11, padding: "10px 11px 10px 31px", fontSize: 11, outline: "none", background: "#fff", color: "#334155", boxShadow: "0 2px 7px rgba(15,23,42,.025)" }}
+            />
+          </div>
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            aria-label="Filter print jobs by date"
+            style={{ border: "1px solid #dfe6ee", borderRadius: 11, padding: "10px 10px", fontSize: 11, color: "#475569", background: "#fff", outline: "none" }}
+          >
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="7days">Last 7 days</option>
+            <option value="30days">Last 30 days</option>
+          </select>
+          <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} aria-label="Sort print jobs" style={{ border: "1px solid #dfe6ee", borderRadius: 11, padding: "10px 10px", fontSize: 11, color: "#475569", background: "#fff", outline: "none" }}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <button className="secondaryButton" onClick={loadJobs} disabled={loading} style={{ padding: "9px 12px", borderRadius: 11 }}>
+            <RotateCcw size={14} /> {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {!searchQuery && dateFilter === "all" && todayJobs.length > 0 && (
+        <div style={{ marginBottom: 14, color: "#64748b", fontSize: 10 }}>
+          Today: <strong style={{ color: "#334155" }}>{todayJobs.length}</strong> submitted ·{" "}
+          <strong style={{ color: "#047857" }}>{todayCompleted}</strong> completed ·{" "}
+          <strong style={{ color: "#b91c1c" }}>{todayRejected}</strong> rejected.
+        </div>
+      )}
+
+      {(searchQuery || dateFilter !== "all") && (
+        <div style={{ marginBottom: 14, color: "#64748b", fontSize: 10 }}>
+          Showing <strong style={{ color: "#334155" }}>{filteredJobs.length}</strong> matching print job{filteredJobs.length === 1 ? "" : "s"}.
+        </div>
+      )}
+
+      {error && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, background: "#fff1f2", color: "#be123c", fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+
+      {loading && !jobs.length ? (
+        <div className="dashboardCard" style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
+          Loading print queue…
+        </div>
+      ) : !filteredJobs.length ? (
+        <div className="dashboardCard" style={{ padding: 46, textAlign: "center" }}>
+          <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 16, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}>
+            <PrinterIcon size={25} />
+          </div>
+          <h3 style={{ margin: "0 0 6px" }}>{jobs.length ? "No jobs in this view" : "No print jobs yet"}</h3>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>
+            {jobs.length ? "Try another filter, search, or switch between Active queue and History." : "Jobs submitted through your café QR code will appear here."}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {sortedJobs.map((job) => {
+            const meta = statusMeta[job.status] || statusMeta.pending;
+            return (
+              <section key={job.id} className="dashboardCard" style={{ padding: 0, overflow: "hidden", border: job.status === "pending" ? "1px solid #fed7aa" : "1px solid #e5eaf0", boxShadow: "0 5px 20px rgba(15,23,42,.045)" }}>
+                <div style={{ padding: "16px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <h3 style={{ margin: 0, fontSize: 17, color: "#0f172a" }}>{job.customer_name}</h3>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 9px", borderRadius: 999, background: meta.bg, color: meta.color, fontSize: 10, fontWeight: 850, textTransform: "uppercase" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 99, background: meta.dot }} />{meta.label}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap", color: "#64748b", fontSize: 11 }}>
+                      {job.customer_phone ? <a href={`tel:${job.customer_phone}`} style={{ color: "#475569", textDecoration: "none" }}>☎ {job.customer_phone}</a> : <span>No phone</span>}
+                      <span>•</span><span title={`Submitted ${formatExactTime(job.created_at)}`}>{formatTime(job.created_at)}</span>
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: "right" }}>
+                    <div style={{ color: "#94a3b8", fontSize: 9, fontFamily: "monospace" }}>JOB</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: "flex-end" }}>
+                      <button title="Copy job ID" aria-label="Copy job ID" onClick={() => navigator.clipboard?.writeText(job.id).catch(() => {})} style={{ border: "none", background: "transparent", padding: 0, color: "#334155", fontSize: 11, fontFamily: "monospace", fontWeight: 750, cursor: "pointer" }}>#{job.id.slice(0, 8).toUpperCase()} · Copy</button>
+                      <button onClick={() => setSelectedJobId(job.id)} style={{ border: "1px solid #dbe4ef", background: "#fff", color: "#2563eb", borderRadius: 8, padding: "5px 8px", fontSize: 9, fontWeight: 800, cursor: "pointer" }}>Details</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "14px 18px" }}>
+                  <div style={{ marginBottom: 9, color: "#94a3b8", fontSize: 9, fontWeight: 850, letterSpacing: ".7px", textTransform: "uppercase" }}>Print request</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
+                    {[
+                      ["Mode", job.color_mode === "color" ? "Color" : "B&W"],
+                      ["Copies", `${job.copies} ${job.copies === 1 ? "copy" : "copies"}`],
+                      ["Paper", job.paper_size],
+                      ["Sides", job.duplex ? "Duplex" : "Single-sided"]
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ padding: "10px 11px", border: "1px solid #e5eaf0", background: "#f8fafc", borderRadius: 11 }}>
+                        <div style={{ color: "#94a3b8", fontSize: 8, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".5px" }}>{label}</div>
+                        <div style={{ marginTop: 3, color: "#334155", fontSize: 11, fontWeight: 800 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 9, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 11px", borderRadius: 11, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                    <div><div style={{ color: "#15803d", fontSize: 8, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".5px" }}>Estimated print price</div><div style={{ marginTop: 3, color: "#166534", fontSize: 9 }}>Based on {job.files.length} file{job.files.length === 1 ? "" : "s"} × {job.copies} {job.duplex ? "with duplex discount" : ""}</div></div>
+                    <strong style={{ color: "#166534", fontSize: 16 }}>₹{calculatePrintEstimate({ workspace, colorMode: job.color_mode, paperSize: job.paper_size, copies: job.copies, duplex: job.duplex, fileCount: job.files.length }).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
+                  </div>
+                  <div style={{ marginTop: 9, color: "#94a3b8", fontSize: 9 }}>Submitted {formatExactTime(job.created_at)}</div>
+
+                  {job.notes && (
+                    <div style={{ marginTop: 12, padding: "9px 11px", borderRadius: 10, background: "#f8fafc", color: "#475569", fontSize: 11, lineHeight: 1.5 }}>
+                      <strong>Note:</strong> {job.notes}
+                    </div>
+                  )}
+
+                  <div className="printJobFiles" style={{ marginTop: 13, display: "flex", flexDirection: "column", gap: 7 }}>
+                    {job.files.map((file) => (
+                      <div key={file.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 11px", background: "#fff", border: "1px solid #e5eaf0", borderRadius: 11, boxShadow: "0 2px 8px rgba(15,23,42,.025)" }}>
+                        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 9 }}>
+                          <div style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 9, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}><FileText size={16} /></div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 750, color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.file_name}</div>
+                            {file.file_size ? <div style={{ marginTop: 2, color: "#94a3b8", fontSize: 9 }}>{formatSize(file.file_size)}</div> : null}
+                          </div>
+                        </div>
+                        <button className="secondaryButton" style={{ padding: "7px 10px", flexShrink: 0 }} onClick={() => downloadFile(file)} disabled={busyId === file.id}>
+                          <Download size={13} /> {busyId === file.id ? "Opening…" : "Open"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(job.status === "pending" || job.status === "accepted" || job.status === "printing") && (
+                    <div className="printJobActions" style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+                      {job.status === "pending" && (
+                        <button
+                          className="secondaryButton"
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              `Reject print job #${job.id.slice(0, 8).toUpperCase()} from ${job.customer_name || "this customer"}?`
+                            );
+                            if (confirmed) updateStatus(job, "rejected");
+                          }}
+                          disabled={busyId === job.id}
+                          style={{ color: "#b91c1c" }}
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {job.status === "pending" && <button className="primaryButton" onClick={() => updateStatus(job, "accepted")} disabled={busyId === job.id}>{busyId === job.id ? "Accepting…" : "Accept Job"}</button>}
+                      {job.status === "accepted" && <button className="primaryButton" onClick={() => updateStatus(job, "printing")} disabled={busyId === job.id}>{busyId === job.id ? "Starting…" : "Start Printing"}</button>}
+                      {job.status === "printing" && <button className="primaryButton" onClick={() => updateStatus(job, "completed")} disabled={busyId === job.id}>{busyId === job.id ? "Saving…" : "Complete & Record Payment"}</button>}
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {paymentJob && (
+        <div role="dialog" aria-modal="true" aria-label="Record print payment" onClick={() => { if (busyId !== paymentJob.id) setPaymentJob(null); }} style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(15,23,42,.48)", display: "grid", placeItems: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(430px, 100%)", background: "#fff", borderRadius: 18, padding: 22, boxShadow: "0 24px 70px rgba(15,23,42,.25)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div><div style={{ color: "#64748b", fontSize: 9, fontWeight: 850, letterSpacing: ".7px", textTransform: "uppercase" }}>Complete print job</div><h2 style={{ margin: "5px 0 4px", fontSize: 20 }}>Record payment</h2><div style={{ color: "#64748b", fontSize: 10 }}>{paymentJob.customer_name} · #{paymentJob.id.slice(0, 8).toUpperCase()}</div></div>
+              <button className="iconButton" onClick={() => setPaymentJob(null)} disabled={busyId === paymentJob.id} aria-label="Close payment dialog"><X size={18} /></button>
+            </div>
+            <div style={{ marginTop: 18, padding: 13, borderRadius: 12, background: "#f8fafc", border: "1px solid #e5eaf0" }}>
+              <div style={{ color: "#94a3b8", fontSize: 9, textTransform: "uppercase", fontWeight: 800 }}>Estimated amount</div>
+              <strong style={{ display: "block", marginTop: 4, fontSize: 18 }}>₹{calculatePrintEstimate({ workspace, colorMode: paymentJob.color_mode, paperSize: paymentJob.paper_size, copies: paymentJob.copies, duplex: paymentJob.duplex, fileCount: paymentJob.files?.length || 0 }).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
+            </div>
+            <label style={{ display: "block", marginTop: 15, fontSize: 10, fontWeight: 800, color: "#475569" }}>FINAL AMOUNT (₹)<input value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} type="number" min="0" step="0.01" className="textInput" style={{ width: "100%", marginTop: 6, boxSizing: "border-box" }} /></label>
+            <label style={{ display: "block", marginTop: 12, fontSize: 10, fontWeight: 800, color: "#475569" }}>PAYMENT STATUS<select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className="textInput" style={{ width: "100%", marginTop: 6, boxSizing: "border-box" }}><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></label>
+            <label style={{ display: "block", marginTop: 12, fontSize: 10, fontWeight: 800, color: "#475569" }}>PAYMENT METHOD<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="textInput" style={{ width: "100%", marginTop: 6, boxSizing: "border-box" }}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></select></label>
+            <label style={{ display: "block", marginTop: 12, fontSize: 10, fontWeight: 800, color: "#475569" }}>NOTE (OPTIONAL)<input value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} placeholder="e.g. Paid in cash" className="textInput" style={{ width: "100%", marginTop: 6, boxSizing: "border-box" }} /></label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}><button className="secondaryButton" onClick={() => setPaymentJob(null)} disabled={busyId === paymentJob.id}>Cancel</button><button className="primaryButton" onClick={completePrintJobWithPayment} disabled={busyId === paymentJob.id}>{busyId === paymentJob.id ? "Saving…" : "Complete & Save Payment"}</button></div>
+          </div>
+        </div>
+      )}
+      {selectedJob && (
+        <div role="dialog" aria-modal="true" aria-label="Print job details" onClick={() => setSelectedJobId(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,.42)", display: "flex", justifyContent: "flex-end" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(460px, 100%)", height: "100%", overflowY: "auto", background: "#fff", boxShadow: "-12px 0 40px rgba(15,23,42,.18)", padding: 22, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingBottom: 16, borderBottom: "1px solid #e5eaf0" }}>
+              <div>
+                <div style={{ color: "#64748b", fontSize: 9, fontWeight: 850, letterSpacing: ".7px", textTransform: "uppercase" }}>Print job</div>
+                <h2 style={{ margin: "5px 0 4px", fontSize: 20, color: "#0f172a" }}>{selectedJob.customer_name}</h2>
+                <div style={{ color: "#64748b", fontSize: 10, fontFamily: "monospace" }}>#{selectedJob.id}</div>
+              </div>
+              <button className="iconButton" onClick={() => setSelectedJobId(null)} aria-label="Close print job details"><X size={19} /></button>
+            </div>
+
+            {(() => {
+              const meta = statusMeta[selectedJob.status] || statusMeta.pending;
+              return (
+                <div style={{ marginTop: 18 }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 999, background: meta.bg, color: meta.color, fontSize: 10, fontWeight: 850, textTransform: "uppercase" }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 99, background: meta.dot }} />{meta.label}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 16 }}>
+                    {[
+                      ["Customer phone", selectedJob.customer_phone || "Not provided"],
+                      ["Submitted", formatExactTime(selectedJob.created_at)],
+                      ["Mode", selectedJob.color_mode === "color" ? "Color" : "B&W"],
+                      ["Copies", `${selectedJob.copies} ${selectedJob.copies === 1 ? "copy" : "copies"}`],
+                      ["Paper", selectedJob.paper_size],
+                      ["Sides", selectedJob.duplex ? "Duplex" : "Single-sided"],
+                      ["Estimated price", `₹${calculatePrintEstimate({ workspace, colorMode: selectedJob.color_mode, paperSize: selectedJob.paper_size, copies: selectedJob.copies, duplex: selectedJob.duplex, fileCount: selectedJob.files.length }).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`],
+                      ["Final amount", selectedJob.final_amount != null ? `₹${Number(selectedJob.final_amount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "Not recorded"],
+                      ["Payment", selectedJob.payment_status === "paid" ? `Paid · ${(selectedJob.payment_method || "").toUpperCase()}` : "Unpaid"]
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ padding: "11px 12px", border: "1px solid #e5eaf0", borderRadius: 11, background: "#f8fafc" }}>
+                        <div style={{ color: "#94a3b8", fontSize: 8, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".45px" }}>{label}</div>
+                        <div style={{ marginTop: 4, color: "#334155", fontSize: 11, fontWeight: 750, wordBreak: "break-word" }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedJob.notes && (
+                    <div style={{ marginTop: 14, padding: 12, borderRadius: 11, background: "#f8fafc", border: "1px solid #e5eaf0", color: "#475569", fontSize: 11, lineHeight: 1.55 }}><strong>Customer note:</strong> {selectedJob.notes}</div>
+                  )}
+
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ color: "#64748b", fontSize: 9, fontWeight: 850, letterSpacing: ".7px", textTransform: "uppercase", marginBottom: 10 }}>Workflow progress</div>
+                    {(() => {
+                      const stages = [
+                        ["pending", "Request received"],
+                        ["accepted", "Job accepted"],
+                        ["printing", "Printing"],
+                        ["completed", "Completed"]
+                      ];
+                      const currentIndex = selectedJob.status === "rejected" ? 0 : Math.max(0, stages.findIndex(([key]) => key === selectedJob.status));
+                      return (
+                        <div style={{ border: "1px solid #e5eaf0", borderRadius: 12, padding: "11px 12px", background: "#fbfcfe" }}>
+                          {stages.map(([key, label], index) => {
+                            const done = selectedJob.status !== "rejected" && index < currentIndex;
+                            const current = selectedJob.status !== "rejected" && index === currentIndex;
+                            const rejected = selectedJob.status === "rejected" && index === 0;
+                            return (
+                              <div key={key} style={{ display: "flex", gap: 10, minHeight: index === stages.length - 1 ? 22 : 38 }}>
+                                <div style={{ width: 18, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                  <div style={{ width: 10, height: 10, borderRadius: 99, background: rejected ? "#ef4444" : done || current ? "#2563eb" : "#cbd5e1", boxShadow: current ? "0 0 0 4px #dbeafe" : "none" }} />
+                                  {index < stages.length - 1 && <div style={{ width: 1, flex: 1, marginTop: 3, background: done ? "#93c5fd" : "#e2e8f0" }} />}
+                                </div>
+                                <div style={{ paddingBottom: index === stages.length - 1 ? 0 : 8, marginTop: -2 }}>
+                                  <div style={{ fontSize: 10, fontWeight: current || rejected ? 800 : 700, color: rejected ? "#b91c1c" : done || current ? "#334155" : "#94a3b8" }}>{rejected ? "Request rejected" : label}</div>
+                                  {index === 0 && <div style={{ marginTop: 2, fontSize: 8, color: "#94a3b8" }}>{formatExactTime(selectedJob.created_at)}</div>}
+                                  {index === stages.length - 1 && selectedJob.completed_at && <div style={{ marginTop: 2, fontSize: 8, color: "#94a3b8" }}>{formatExactTime(selectedJob.completed_at)}</div>}
+                                  {current && <div style={{ marginTop: 2, fontSize: 8, color: "#2563eb", fontWeight: 750 }}>Current stage</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ color: "#64748b", fontSize: 9, fontWeight: 850, letterSpacing: ".7px", textTransform: "uppercase", marginBottom: 9 }}>Files ({selectedJob.files.length})</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {selectedJob.files.map((file) => (
+                        <div key={file.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 12px", border: "1px solid #e5eaf0", borderRadius: 11 }}>
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 9 }}>
+                            <div style={{ width: 31, height: 31, flexShrink: 0, borderRadius: 8, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}><FileText size={15} /></div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 10, fontWeight: 750, color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.file_name}</div>
+                              {file.file_size ? <div style={{ marginTop: 2, color: "#94a3b8", fontSize: 9 }}>{formatSize(file.file_size)}</div> : null}
+                            </div>
+                          </div>
+                          <button className="secondaryButton" onClick={() => downloadFile(file)} disabled={busyId === file.id} style={{ padding: "7px 9px", flexShrink: 0 }}><Download size={12} /> Open</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedJob.status !== "pending" && selectedJob.completed_at && (
+                    <div style={{ marginTop: 18, color: "#64748b", fontSize: 10 }}>Completed/closed: <strong style={{ color: "#334155" }}>{formatExactTime(selectedJob.completed_at)}</strong></div>
+                  )}
+
+                  {(selectedJob.status === "pending" || selectedJob.status === "accepted" || selectedJob.status === "printing") && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 22, paddingTop: 16, borderTop: "1px solid #e5eaf0" }}>
+                      {selectedJob.status === "pending" && <button className="secondaryButton" onClick={() => { setSelectedJobId(null); const confirmed = window.confirm(`Reject print job #${selectedJob.id.slice(0, 8).toUpperCase()} from ${selectedJob.customer_name || "this customer"}?`); if (confirmed) updateStatus(selectedJob, "rejected"); }} style={{ color: "#b91c1c" }}>Reject</button>}
+                      {selectedJob.status === "pending" && <button className="primaryButton" onClick={() => updateStatus(selectedJob, "accepted")}>Accept Job</button>}
+                      {selectedJob.status === "accepted" && <button className="primaryButton" onClick={() => updateStatus(selectedJob, "printing")}>Start Printing</button>}
+                      {selectedJob.status === "printing" && <button className="primaryButton" onClick={() => updateStatus(selectedJob, "completed")}>Mark Completed</button>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
+  const [workspaceInfo, setWorkspaceInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [colorMode, setColorMode] = useState("bw");
+  const [copies, setCopies] = useState(1);
+  const [paperSize, setPaperSize] = useState("A4");
+  const [duplex, setDuplex] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(null);
+  const [trackedJob, setTrackedJob] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
+  const customerPrintEstimate = useMemo(() => calculatePrintEstimate({ workspace: workspaceInfo, colorMode, paperSize, copies, duplex, fileCount: files.length }), [workspaceInfo, colorMode, paperSize, copies, duplex, files.length]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") return;
+    const savedJobId = localStorage.getItem(`cc_print_job_${workspaceId}`);
+    if (!savedJobId) return;
+
+    setTrackedJob({ id: savedJobId });
+    setSuccess({ id: savedJobId });
+  }, [workspaceId]);
+
+  const loadTrackedJob = async (jobId) => {
+    if (!jobId || !workspaceId) return;
+    setTrackingLoading(true);
+    setTrackingError("");
+    try {
+      const { data, error } = await supabase.rpc("get_public_print_job_status", {
+        p_job_id: jobId,
+        p_workspace_id: workspaceId
+      });
+      if (error) throw error;
+      const job = Array.isArray(data) ? data[0] || null : data || null;
+      if (!job) throw new Error("This print request could not be found.");
+      setTrackedJob(job);
+    } catch (err) {
+      console.error("Print job tracking failed:", err);
+      setTrackingError(err?.message || "Could not load print request status.");
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!trackedJob?.id || !workspaceId) return;
+
+    const jobId = trackedJob.id;
+    loadTrackedJob(jobId);
+    const interval = setInterval(() => loadTrackedJob(jobId), 10000);
+    // Listen for an immediate status-change signal from the café dashboard.
+    // We still call the public RPC after receiving it, so the database remains
+    // the source of truth and the broadcast itself cannot spoof a status.
+    const channel = supabase
+      .channel(`print-job-status-${workspaceId}-${jobId}`)
+      .on(
+        "broadcast",
+        { event: "status_update" },
+        (payload) => {
+          if (payload?.payload?.jobId === jobId) {
+            loadTrackedJob(jobId);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.warn("Print job status realtime subscription failed; polling remains active.");
+        }
+      });
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [trackedJob?.id, workspaceId]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadWorkspace = async () => {
+      if (!workspaceId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase.rpc("get_public_workspace", {
+          p_workspace_id: workspaceId
+        });
+        const workspace = Array.isArray(data) ? data[0] || null : data || null;
+        if (error) console.error("QR workspace lookup failed:", error);
+        if (mounted) setWorkspaceInfo(workspace);
+      } catch (error) {
+        console.error("QR workspace lookup failed:", error);
+        if (mounted) setWorkspaceInfo(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    loadWorkspace();
+    return () => { mounted = false; };
+  }, [workspaceId]);
+
+  const handleFiles = (event) => {
+    const selected = Array.from(event.target.files || []);
+    setError("");
+    setFiles(selected.slice(0, 10));
+  };
+
+  const submitJob = async (event) => {
+    event.preventDefault();
+    setError("");
+    if (!workspaceInfo?.id) return setError("This café could not be found.");
+    if (!customerName.trim()) return setError("Please enter your name.");
+    if (!files.length) return setError("Please upload at least one document.");
+    if (files.length > 10) return setError("You can upload up to 10 files.");
+
+    setSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("workspaceId", workspaceInfo.id);
+      formData.append("customerName", customerName.trim());
+      formData.append("customerPhone", customerPhone.trim());
+      formData.append("colorMode", colorMode);
+      formData.append("copies", String(copies));
+      formData.append("paperSize", paperSize);
+      formData.append("duplex", String(duplex));
+      formData.append("notes", notes.trim());
+      files.forEach((file) => formData.append("files", file, file.name));
+
+      const response = await fetch("https://nfwxxbwjdfadnolmzcxc.supabase.co/functions/v1/submit-print-job", {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) throw new Error(result.error || "Could not submit the print request.");
+      setSuccess(result.job);
+      setTrackedJob(result.job);
+      if (typeof window !== "undefined" && result.job?.id) {
+        localStorage.setItem(`cc_print_job_${workspaceId}`, result.job.id);
+      }
+      setFiles([]);
+      setCustomerName("");
+      setCustomerPhone("");
+      setNotes("");
+    } catch (err) {
+      console.error("Print job submission failed:", err);
+      setError(err?.message || "Could not submit the print request.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (success) {
+    const status = trackedJob?.status || "pending";
+    const statusMeta = {
+      pending: { label: "Request received", color: "#2563eb", bg: "#eff6ff", text: "The café has received your print request." },
+      accepted: { label: "Accepted", color: "#7c3aed", bg: "#f5f3ff", text: "The café has accepted your request." },
+      printing: { label: "Printing now", color: "#d97706", bg: "#fffbeb", text: "Your documents are currently being printed." },
+      completed: { label: "Completed", color: "#059669", bg: "#ecfdf5", text: "Your print request has been completed." },
+      rejected: { label: "Rejected", color: "#be123c", bg: "#fff1f2", text: "The café could not process this print request." }
+    }[status] || { label: status, color: "#64748b", bg: "#f8fafc", text: "Your print request status is being updated." };
+
+    const clearTracking = () => {
+      if (typeof window !== "undefined") localStorage.removeItem(`cc_print_job_${workspaceId}`);
+      setTrackedJob(null);
+      setSuccess(null);
+      setTrackingError("");
+    };
+
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "#f8fafc", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+        <div className="dashboardCard" style={{ width: "100%", maxWidth: 520, padding: 30 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 60, height: 60, margin: "0 auto 16px", borderRadius: 18, display: "grid", placeItems: "center", background: statusMeta.bg, color: statusMeta.color }}><PrinterIcon size={30} /></div>
+            <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>PRINT REQUEST</span>
+            <h1 style={{ margin: "8px 0 6px", fontSize: 26 }}>{workspaceInfo?.name || "Café"}</h1>
+            <p style={{ margin: "0 auto", color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>Track your request here. This page checks for status updates automatically.</p>
+          </div>
+
+          <div style={{ marginTop: 22, padding: 18, borderRadius: 16, background: statusMeta.bg, border: `1px solid ${statusMeta.color}22`, textAlign: "center" }}>
+            <div style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Current status</div>
+            <strong style={{ display: "block", marginTop: 6, color: statusMeta.color, fontSize: 20 }}>{statusMeta.label}</strong>
+            <p style={{ margin: "7px 0 0", color: "#475569", fontSize: 11 }}>{statusMeta.text}</p>
+          </div>
+
+          {trackedJob?.estimated_price != null && (
+            <div style={{ marginTop: 14, padding: 15, borderRadius: 14, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+              <div style={{ color: "#15803d", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Estimated price</div>
+              <strong style={{ display: "block", marginTop: 5, color: "#166534", fontSize: 22 }}>₹{Number(trackedJob.estimated_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
+              <div style={{ marginTop: 4, color: "#4d7c5a", fontSize: 9 }}>Final amount may be adjusted by the café if the document requires a different page count.</div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, padding: 15, borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+            <div style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Job number</div>
+            <strong style={{ display: "block", marginTop: 5, fontSize: 21, fontFamily: "monospace" }}>#{success.id.slice(0, 8).toUpperCase()}</strong>
+            {trackedJob?.updated_at && <div style={{ marginTop: 6, color: "#94a3b8", fontSize: 10 }}>Last updated {new Date(trackedJob.updated_at).toLocaleTimeString()}</div>}
+          </div>
+
+          {trackingLoading && <div style={{ marginTop: 12, textAlign: "center", color: "#64748b", fontSize: 10 }}>Checking latest status…</div>}
+          {trackingError && <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontSize: 11 }}>{trackingError}</div>}
+
+          <button className="primaryButton" style={{ width: "100%", marginTop: 18 }} onClick={clearTracking}>Send another request</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", padding: "24px 16px 40px", background: "#f8fafc", color: "#0f172a", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ width: "100%", maxWidth: 560, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 16, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}><QrCode size={25} /></div>
+          <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>CYBERCAFE HELPER</span>
+          <h1 style={{ margin: "7px 0 5px", fontSize: 27 }}>{loading ? "Opening café portal…" : workspaceInfo?.name || "Customer Print Portal"}</h1>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>Upload your documents and send them to this café for printing.</p>
+        </div>
+
+        {!loading && !workspaceInfo && (
+          <div className="dashboardCard" style={{ padding: 16, color: "#be123c", marginBottom: 14 }}>This café QR code could not be resolved. Please ask the café owner for a new QR code.</div>
+        )}
+
+        {workspaceInfo && (
+          <form onSubmit={submitJob} className="dashboardCard" style={{ padding: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Your name<input className="input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Enter your name" required /></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Phone number <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span><input className="input" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="9876543210" inputMode="tel" /></label>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Documents</div>
+                <label style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
+                  <Upload size={22} style={{ color: "#2563eb" }} />
+                  <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected` : "Choose documents"}</strong>
+                  <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files</span>
+                  <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFiles} style={{ display: "none" }} />
+                </label>
+                {files.length > 0 && <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>{files.map((file, index) => <div key={`${file.name}-${index}`} style={{ fontSize: 10, color: "#475569", padding: "6px 8px", background: "#f8fafc", borderRadius: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</div>)}</div>}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Color<select className="input" value={colorMode} onChange={(e) => setColorMode(e.target.value)}><option value="bw">B&W</option><option value="color">Color</option></select></label>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Paper size<select className="input" value={paperSize} onChange={(e) => setPaperSize(e.target.value)}><option>A4</option><option>A3</option><option>Letter</option><option>Legal</option></select></label>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Copies<input className="input" type="number" min="1" max="999" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} /></label>
+                <label style={{ fontSize: 12, fontWeight: 700 }}>Printing<select className="input" value={duplex ? "duplex" : "single"} onChange={(e) => setDuplex(e.target.value === "duplex")}><option value="single">Single-sided</option><option value="duplex">Duplex</option></select></label>
+              </div>
+
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Notes <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span><textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" rows="3" style={{ resize: "vertical" }} /></label>
+
+              <div style={{ padding: 14, borderRadius: 13, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div><div style={{ color: "#15803d", fontSize: 9, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".8px" }}>Estimated price</div><div style={{ marginTop: 4, color: "#4d7c5a", fontSize: 9 }}>Based on {files.length} file{files.length === 1 ? "" : "s"} × {copies} {copies === 1 ? "copy" : "copies"}{duplex ? " · duplex discount applied" : ""}</div></div>
+                <strong style={{ color: "#166534", fontSize: 21 }}>₹{customerPrintEstimate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
+              </div>
+
+              {error && <div style={{ padding: 10, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontSize: 11 }}>{error}</div>}
+
+              <button type="submit" className="primaryButton" disabled={submitting || loading || !workspaceInfo}>{submitting ? "Sending documents…" : "Send Print Request"}</button>
+            </div>
+          </form>
+        )}
+
+        {workspaceInfo?.phone && <div style={{ textAlign: "center", marginTop: 14, color: "#94a3b8", fontSize: 10 }}>Café contact: {workspaceInfo.phone}</div>}
+      </div>
+    </div>
+  );
+}
+
 function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   // Workspace membership is the source of truth for permissions.
   const role = workspaceRole || "owner";
@@ -2164,8 +3511,6 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   const [reminderCustomer, setReminderCustomer] = useState(null);
   const [aiCustomer, setAiCustomer] = useState(null);
   const [customerAccessCustomer, setCustomerAccessCustomer] = useState(null);
-
-  const [aiApiKey, setAiApiKey] = useState(() => localStorage.getItem("cc_gemini_api_key") || "");
 
   const [serviceTemplates, setServiceTemplates] = useState(() => getStoredServiceTemplates());
   const [teamMembers, setTeamMembers] = useState([]);
@@ -2474,16 +3819,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
     localStorage.setItem("cc_theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (aiApiKey) localStorage.setItem("cc_gemini_api_key", aiApiKey);
-    else localStorage.removeItem("cc_gemini_api_key");
-  }, [aiApiKey]);
-
   const generateAiCustomerSummary = async (customer, onProgress) => {
-    if (!aiApiKey.trim()) {
-      throw new Error("Gemini API key is not configured. Add it in Settings → AI Assistant.");
-    }
-
     const documents = Array.isArray(customer.documents) ? customer.documents : [];
     const receivedDocs = documents
       .filter((doc) => typeof doc === "object" ? doc.received : true)
@@ -2519,96 +3855,38 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       notes: customer.notes || "No notes"
     };
 
-    const prompt = `You are the AI operations assistant inside CyberCafe Helper. Analyze ONLY the CRM data below. Do not invent facts.
-
-Return a SHORT JSON object with exactly these four string fields:
-summary: one concise sentence about the customer's service and current stage/status.
-pending: one concise sentence naming the most important pending document, task, overdue item or follow-up. Prefer an action-oriented phrase such as "Call the customer today regarding pending documents." If none, say "Nothing currently pending."
-nextAction: one practical next action based only on the CRM data. Make it specific and action-oriented; mention the customer or task when useful.
-customerMessage: one short, polite WhatsApp-ready message to the customer.
-
-Keep each field to 1-2 short sentences. Do not include payment amounts; the app calculates those from CRM data. Return JSON only.
-
-CRM DATA:
-${JSON.stringify(customerContext)}`;
-
     onProgress?.("Generating quick summary…");
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
     try {
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": aiApiKey.trim()
-          },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              maxOutputTokens: 300,
-              thinkingConfig: { thinkingLevel: "low" },
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: {
-                  summary: { type: "string" },
-                  pending: { type: "string" },
-                  nextAction: { type: "string" },
-                  customerMessage: { type: "string" }
-                },
-                required: ["summary", "pending", "nextAction", "customerMessage"]
-              }
-            }
-          }),
-          signal: controller.signal
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("generate-ai-customer-summary", {
+        body: { workspaceId: workspace.id, customer: customerContext }
+      });
 
       onProgress?.("Finalizing summary…");
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error?.message || `Gemini request failed (${response.status}).`);
+      if (error) {
+        throw new Error(error.message || "Unable to connect to the secure AI service.");
       }
 
-      const text = (data?.candidates || [])
-        .flatMap((candidate) => candidate?.content?.parts || [])
-        .filter((part) => typeof part?.text === "string")
-        .map((part) => part.text)
-        .join("")
-        .trim();
-
-      if (!text) {
-        const reason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason;
-        throw new Error(reason ? `Gemini returned no text (${reason}).` : "Gemini completed the request, but no text was returned.");
+      if (!data?.success || !data?.result) {
+        throw new Error(data?.error || "AI summary could not be generated. Please try again.");
       }
 
+      const result = typeof data.result === "string" ? data.result : JSON.stringify(data.result);
       let parsed;
       try {
-        parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim());
+        parsed = JSON.parse(result.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim());
       } catch {
-        throw new Error("Gemini returned an incomplete summary. Please try again.");
+        throw new Error("AI returned an incomplete summary. Please try again.");
       }
 
       if (!parsed?.summary || !parsed?.pending || !parsed?.nextAction || !parsed?.customerMessage) {
-        throw new Error("Gemini returned an incomplete summary. Please try again.");
+        throw new Error("AI returned an incomplete summary. Please try again.");
       }
 
       return JSON.stringify(parsed);
     } catch (error) {
-      if (error?.name === "AbortError") {
-        throw new Error("Gemini took longer than 30 seconds to respond. Please try again.");
-      }
-      if (error instanceof TypeError) {
-        throw new Error("Could not connect to Gemini. Check your internet connection or API key restrictions.");
-      }
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   };
 
@@ -2970,6 +4248,8 @@ ${JSON.stringify(customerContext)}`;
 
     const pageResults = [
       { name: "Dashboard", subtitle: "Workspace overview" },
+      { name: "Print Jobs", subtitle: "QR document print queue" },
+      { name: "Earnings", subtitle: "Print revenue and earnings" },
       { name: "Customer Work", subtitle: "Customer CRM and work queue" },
       { name: "Services", subtitle: "Government portals and service templates" },
       { name: "Follow-ups", subtitle: "Reminders and customer follow-ups" },
@@ -3316,6 +4596,25 @@ ${JSON.stringify(customerContext)}`;
   // ============================================================
   // STEP 18G — SUPABASE DATA BACKUP & RESTORE
   // ============================================================
+
+  const savePrintPricing = async (pricing) => {
+    if (!workspace?.id) throw new Error("Workspace is still loading.");
+    const update = {
+      print_bw_price: Number(pricing.bwPrice),
+      print_color_price: Number(pricing.colorPrice),
+      print_a3_bw_price: Number(pricing.a3BwPrice),
+      print_a3_color_price: Number(pricing.a3ColorPrice),
+      print_duplex_discount: Number(pricing.duplexDiscount)
+    };
+    const { data, error } = await supabase
+      .from("workspaces")
+      .update(update)
+      .eq("id", workspace.id)
+      .select("id, name, owner_id, phone, address, gstin, print_bw_price, print_color_price, print_a3_bw_price, print_a3_color_price, print_duplex_discount, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  };
 
   const exportBackup = async () => {
     if (!workspace?.id) {
@@ -3830,6 +5129,53 @@ ${JSON.stringify(customerContext)}`;
 
 
 
+
+        /* HELP & SUPPORT */
+        .helpSupportPage { max-width:1100px; }
+        .helpSupportGrid { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(340px,.95fr); gap:16px; align-items:start; }
+        .helpFaqCard, .helpChatCard { padding:0; overflow:hidden; }
+        .helpCardHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px 18px; border-bottom:1px solid #e8edf3; background:#fbfcfe; }
+        .helpCardHeader h2 { margin:4px 0 0; color:#172033; font-size:17px; }
+        .helpHeaderIcon, .helpChatIcon { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; background:#eff6ff; color:#2563eb; }
+        .helpChatIcon { background:#ecfeff; color:#0891b2; }
+        .helpFaqList { padding:8px 14px 14px; }
+        .helpFaqItem { border-bottom:1px solid #eef1f5; }
+        .helpFaqItem:last-child { border-bottom:0; }
+        .helpFaqItem > button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 4px; border:0; background:transparent; color:#334155; cursor:pointer; text-align:left; font:inherit; font-size:11px; font-weight:700; }
+        .helpFaqItem > button svg { flex:none; color:#94a3b8; transition:.18s ease; }
+        .helpFaqItem.open > button { color:#1d4ed8; }
+        .helpFaqItem.open > button svg { transform:rotate(90deg); color:#2563eb; }
+        .helpFaqAnswer { padding:0 30px 14px 4px; color:#64748b; font-size:10px; line-height:1.65; }
+        .helpChatMessages { height:300px; overflow:auto; padding:14px; display:flex; flex-direction:column; gap:10px; background:#f8fafc; }
+        .helpChatMessage { max-width:88%; padding:9px 11px; border-radius:11px; font-size:10px; line-height:1.55; }
+        .helpChatMessage.bot { align-self:flex-start; background:#fff; border:1px solid #e2e8f0; color:#475569; }
+        .helpChatMessage.user { align-self:flex-end; background:#eff6ff; border:1px solid #dbeafe; color:#1e40af; }
+        .helpChatMessage span { display:block; margin-bottom:3px; font-size:8px; font-weight:800; letter-spacing:1px; opacity:.7; }
+        .helpChatMessage p { margin:0; }
+        .helpQuickQuestions { display:flex; flex-wrap:wrap; gap:6px; padding:11px 13px 0; }
+        .helpQuickQuestions button { border:1px solid #dbeafe; background:#fff; color:#2563eb; border-radius:999px; padding:6px 9px; cursor:pointer; font:inherit; font-size:9px; }
+        .helpQuickQuestions button:hover { background:#eff6ff; }
+        .helpChatForm { display:flex; gap:7px; padding:12px 13px 7px; }
+        .helpChatForm input { flex:1; min-width:0; box-sizing:border-box; padding:10px 11px; border:1px solid #dfe5ec; border-radius:10px; outline:none; background:#fff; color:#334155; font:inherit; font-size:10px; }
+        .helpChatForm input:focus { border-color:#93c5fd; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+        .helpChatForm button { width:38px; min-width:38px; border:1px solid #2563eb; border-radius:10px; background:#2563eb; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .helpChatNote { margin:0; padding:0 13px 13px; color:#94a3b8; font-size:8px; line-height:1.5; }
+        .theme-dark .helpCardHeader { background:#111827; border-color:#334155; }
+        .theme-dark .helpCardHeader h2 { color:#f1f5f9; }
+        .theme-dark .helpHeaderIcon { background:#172554; color:#93c5fd; }
+        .theme-dark .helpChatIcon { background:#083344; color:#67e8f9; }
+        .theme-dark .helpFaqItem { border-color:#334155; }
+        .theme-dark .helpFaqItem > button { color:#cbd5e1; }
+        .theme-dark .helpFaqItem.open > button { color:#93c5fd; }
+        .theme-dark .helpFaqAnswer { color:#94a3b8; }
+        .theme-dark .helpChatMessages { background:#111827; }
+        .theme-dark .helpChatMessage.bot { background:#172033; border-color:#334155; color:#cbd5e1; }
+        .theme-dark .helpChatMessage.user { background:#172554; border-color:#1e3a8a; color:#bfdbfe; }
+        .theme-dark .helpQuickQuestions button { background:#172033; border-color:#334155; color:#93c5fd; }
+        .theme-dark .helpChatForm input { background:#172033 !important; border-color:#334155 !important; }
+        @media (max-width:820px) { .helpSupportGrid { grid-template-columns:1fr; } }
+        @media (max-width:520px) { .helpChatMessages { height:260px; } .helpCardHeader { padding:14px; } .helpFaqList { padding:6px 11px 11px; } }
+
         /* STEP 19C — ROLE BASED ACCESS */
         .roleBadge { display:inline-flex; align-items:center; gap:5px; margin-top:2px; padding:3px 6px; border-radius:999px; background:#eff6ff; color:#2563eb !important; border:1px solid #dbeafe; width:max-content; text-transform:uppercase; }
         .theme-dark .roleBadge { background:#172554; color:#93c5fd !important; border-color:#1e3a8a; }
@@ -3911,7 +5257,6 @@ ${JSON.stringify(customerContext)}`;
         .theme-light .authShell { background:#f1f5f9; color:#172033; }
         .theme-light .authCard { background:#fff; border-color:#e2e8f0; box-shadow:0 28px 70px rgba(15,23,42,.12); }
         @media (max-width:520px) { .authShell { padding:14px; } .authCard { padding:24px 20px; border-radius:16px; } .authIntro h1 { font-size:24px; } }
-
         /* FINAL WORKSPACE POLISH — search, quick links, settings and themes */\n        .globalSearchWrap { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(620px,52vw); z-index:50; }\n        .globalSearchWrap .searchBox { position:relative; left:auto; top:auto; transform:none; width:100%; }\n        .searchClear { margin-left:auto; border:0; background:transparent; color:#94a3b8; cursor:pointer; display:flex; align-items:center; padding:3px; }\n        .searchClear:hover { color:#475569; }\n        .globalSearchPanel { position:absolute; top:calc(100% + 9px); left:0; right:0; background:#fff; border:1px solid #e2e8f0; border-radius:13px; box-shadow:0 16px 40px rgba(15,23,42,.13); padding:7px; overflow:hidden; }\n        .globalSearchResult { width:100%; display:flex; align-items:center; gap:11px; padding:10px 11px; border:0; border-radius:9px; background:transparent; color:#64748b; cursor:pointer; text-align:left; text-decoration:none; }\n        .globalSearchResult:hover { background:#f6f8fb; color:#2563eb; }\n        .globalSearchResult > svg:first-child { flex:none; }\n        .globalSearchResult > div { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }\n        .globalSearchResult strong { color:#172033; font-size:12px; }\n        .globalSearchResult span { color:#94a3b8; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\n        .globalSearchEmpty { display:flex; align-items:center; gap:9px; padding:15px 12px; color:#94a3b8; font-size:11px; }\n        .dashboardQuickLinks { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }\n        .dashboardQuickLink { display:flex; align-items:center; gap:10px; min-width:0; padding:12px; border:1px solid #e5eaf0; border-radius:11px; background:#fff; color:#64748b; text-decoration:none; transition:.18s ease; }\n        .dashboardQuickLink:hover { transform:translateY(-1px); border-color:#cbd5e1; box-shadow:0 5px 15px rgba(15,23,42,.05); }\n        .dashboardQuickLinkIcon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#eff6ff; color:#2563eb; flex:none; }\n        .dashboardQuickLink > div:nth-child(2) { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }\n        .dashboardQuickLink strong { color:#172033; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\n        .dashboardQuickLink span { color:#94a3b8; font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\n        .dashboardQuickLinksEmpty { display:flex; align-items:center; gap:12px; padding:18px; border:1px dashed #d8e0e9; border-radius:11px; color:#94a3b8; background:#fbfcfe; }\n        .dashboardQuickLinksEmpty span { flex:1; font-size:11px; }\n        .officialQuickLinks { margin-top:28px; }\n        .officialQuickGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }\n        .officialQuickItem { display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid #e5eaf0; border-radius:10px; background:#fff; }\n        .officialQuickItem > div:nth-child(2) { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }\n        .officialQuickItem strong { color:#172033; font-size:11px; }\n        .officialQuickItem span { color:#94a3b8; font-size:9px; }\n        .officialQuickItem .small { min-height:29px; padding:5px 9px; font-size:10px; }\n        .officialQuickItem .small:disabled { cursor:default; opacity:.6; }\n        .billingPanel { overflow:hidden; }
         .billingHeader { margin-bottom:18px; }
         .billingHeaderIcon { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:#eff6ff; color:#2563eb; border:1px solid #dbeafe; flex:0 0 auto; }
@@ -3950,17 +5295,12 @@ ${JSON.stringify(customerContext)}`;
         .billingProgressFill.danger { background:#ef4444; }
         .billingUsageBottom { display:flex; justify-content:space-between; gap:10px; margin-top:7px; color:#94a3b8; font-size:8px; }
         .billingUsageBottom span:first-child { font-weight:700; }
-        .billingUpgradeCard { display:flex; align-items:center; gap:12px; margin-top:18px; padding:14px 15px; border:1px solid #e2e8f0; border-radius:13px; background:#f8fafc; }
+        .billingComingSoonCard { display:flex; align-items:center; gap:12px; margin-top:18px; padding:14px 15px; border:1px solid #e2e8f0; border-radius:13px; background:#f8fafc; }
         .billingUpgradeIcon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#2563eb; background:#eff6ff; border:1px solid #dbeafe; flex:0 0 auto; }
         .billingUpgradeCopy { flex:1; min-width:0; }
         .billingUpgradeCopy strong { display:block; color:#334155; font-size:11px; }
         .billingUpgradeCopy span { display:block; margin-top:3px; color:#7b8794; font-size:9px; line-height:1.5; }
-        .billingUpgradeButton { flex:0 0 auto; min-height:36px; padding:8px 13px; border:1px solid #2563eb; border-radius:9px; background:#2563eb; color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-size:11px; font-weight:800; box-shadow:0 6px 16px rgba(37,99,235,.18); transition:.18s ease; }
-        .billingUpgradeButton:hover { background:#1d4ed8; border-color:#1d4ed8; transform:translateY(-1px); box-shadow:0 9px 20px rgba(37,99,235,.24); }
-        .billingUpgradeButton:active { transform:translateY(0); box-shadow:0 4px 10px rgba(37,99,235,.18); }
-        .billingUpgradeButton:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(37,99,235,.16), 0 6px 16px rgba(37,99,235,.18); }
-        .billingUpgradeButton:disabled { opacity:.78; cursor:wait; transform:none; box-shadow:0 6px 16px rgba(37,99,235,.16); }
-        .billingFinePrint { margin-top:11px; color:#a0aab7; font-size:8px; line-height:1.5; }
+        .billingComingSoonBadge { flex:0 0 auto; padding:6px 8px; border-radius:999px; background:#eef2ff; border:1px solid #e0e7ff; color:#4f46e5; font-size:8px; font-weight:900; letter-spacing:.06em; white-space:nowrap; }
         .billingLoadingGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
         .billingSkeleton { height:92px; border:1px solid #e5eaf0; border-radius:13px; background:#f8fafc; padding:15px; }
         .billingSkeleton span,.billingSkeleton strong,.billingSkeleton small { display:block; border-radius:6px; background:#e8edf3; }
@@ -3972,7 +5312,7 @@ ${JSON.stringify(customerContext)}`;
         .billingErrorBox strong { display:block; font-size:11px; }
         .billingErrorBox span { display:block; margin-top:4px; color:#7f1d1d; font-size:9px; line-height:1.5; }
         @media (max-width:820px) { .billingPlanHero { align-items:flex-start; flex-direction:column; } .billingPlanExpiry { width:100%; padding:11px 0 0; border-left:0; border-top:1px solid #e2e8f0; text-align:left; } }
-        @media (max-width:620px) { .billingUsageGrid,.billingLoadingGrid { grid-template-columns:1fr; } .billingUpgradeCard { align-items:flex-start; flex-wrap:wrap; } .billingUpgradeButton { width:100%; } }
+        @media (max-width:620px) { .billingUsageGrid,.billingLoadingGrid { grid-template-columns:1fr; } .billingComingSoonCard { align-items:flex-start; flex-wrap:wrap; } .billingComingSoonBadge { margin-left:48px; } }
         .settingsTabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:18px 0 16px; align-items:stretch; }
         .settingsTab { min-width:0; min-height:68px; display:flex; align-items:center; justify-content:flex-start; gap:10px; padding:12px 13px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#64748b; cursor:pointer; text-align:left; transition:.18s ease; box-sizing:border-box; }
         .settingsTab:hover { border-color:#cbd5e1; background:#f8fafc; }
@@ -4014,9 +5354,7 @@ ${JSON.stringify(customerContext)}`;
         .theme-emerald .dashboardQuickLink > div:first-child, .theme-emerald .officialQuickItem > div:first-child { background:#ecfdf5; color:#059669; }
         .theme-emerald input:focus, .theme-emerald select:focus, .theme-emerald textarea:focus { border-color:#34d399 !important; box-shadow:0 0 0 3px rgba(16,185,129,.10); }
         .theme-dark { color:#e2e8f0; }\n        .theme-dark .mainArea, .theme-dark .content { background:#0f172a; }\n        .theme-dark .topbar { background:#111827; border-color:#253044; }\n        .theme-dark .searchBox { background:#182234; border-color:#334155; color:#94a3b8; }\n        .theme-dark .searchBox input { color:#e2e8f0; }\n        .theme-dark .globalSearchPanel, .theme-dark .dashboardCard, .theme-dark .opsCard, .theme-dark .statsCard, .theme-dark .serviceCard, .theme-dark .managedServiceCard, .theme-dark .calculatorCard, .theme-dark .quickLinkForm, .theme-dark .savedLinks, .theme-dark .settingsPanel, .theme-dark .settingsOptionCard, .theme-dark .dashboardQuickLink, .theme-dark .officialQuickItem, .theme-dark .followUpPageItem, .theme-dark .followUpStats > div, .theme-dark .modalCard { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .pageHeading h1, .theme-dark .sectionHeading h2, .theme-dark .dashboardCard h3, .theme-dark .opsCard strong, .theme-dark .managedServiceTitle h3, .theme-dark .settingsOptionHeader h2, .theme-dark .settingsIntro h3, .theme-dark .calculatorHeader h3, .theme-dark .savedLink strong, .theme-dark .officialQuickItem strong, .theme-dark .globalSearchResult strong, .theme-dark .followUpCustomer strong, .theme-dark .followUpMain strong, .theme-dark .followUpStats strong { color:#f1f5f9; }\n        .theme-dark .pageHeading p, .theme-dark .sectionHeading p, .theme-dark .dashboardCardHeader, .theme-dark .opsCard span, .theme-dark .opsCard small, .theme-dark .settingsOptionHeader p, .theme-dark .settingsIntro p, .theme-dark .settingsHint, .theme-dark .savedLink span, .theme-dark .officialQuickItem span, .theme-dark .globalSearchResult span, .theme-dark .followUpCustomer span, .theme-dark .followUpDate span, .theme-dark .followUpStats span { color:#94a3b8; }\n        .theme-dark input, .theme-dark select, .theme-dark textarea { background:#111827 !important; border-color:#334155 !important; color:#e2e8f0 !important; }\n        .theme-dark .themeOption { background:#111827; border-color:#334155; }\n        .theme-dark .themeOption.active { background:#172b4d; border-color:#2563eb; }\n        .theme-dark .dashboardQuickLinksEmpty, .theme-dark .followUpEmpty, .theme-dark .emptyState { background:#111827; border-color:#334155; color:#94a3b8; }\n        .theme-dark .dashboardQuickLink strong { color:#f1f5f9; }\n        .theme-dark .globalSearchResult:hover { background:#1e293b; }\n        .theme-dark .secondaryButton { background:#172033; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .secondaryButton:hover { background:#1e293b; }
-        .theme-dark .billingUpgradeButton { background:#3b82f6; border-color:#3b82f6; color:#fff; box-shadow:0 7px 18px rgba(59,130,246,.22); }
-        .theme-dark .billingUpgradeButton:hover { background:#2563eb; border-color:#2563eb; box-shadow:0 10px 22px rgba(59,130,246,.28); }\n        .theme-dark .serviceManagementHeader { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .serviceManagementHeader h2, .theme-dark .serviceDirectoryBlock h2 { color:#f1f5f9; }\n        .theme-dark .managedServiceMeta span { background:#1e293b; color:#94a3b8; }\n        .theme-dark .templateChip, .theme-dark .stageRow { background:#111827; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .documentChecklistItem { background:#172033; border-color:#334155; }\n        .theme-dark .documentChecklistItem strong { color:#f1f5f9; }\n        .theme-dark .documentChecklistItem.missing { background:#2b2516; }\n        .theme-dark .documentChecklistItem.received { background:#13271d; }\n        .theme-dark .tableDocumentProgress small { color:#64748b; }\n        .theme-dark .paymentActivityItem, .theme-dark .attentionItem { background:#172033; border-color:#334155; }\n        .theme-dark .paymentActivityItem strong, .theme-dark .attentionItem strong { color:#f1f5f9; }\n        @media (max-width:900px) { .globalSearchWrap { width:min(560px,58vw); } .dashboardQuickLinks, .officialQuickGrid, .settingsDataActions { grid-template-columns:repeat(2,minmax(0,1fr)); } }\n        @media (max-width:640px) { .globalSearchWrap { position:relative; left:auto; top:auto; transform:none; width:auto; flex:1; order:2; } .topbar { gap:9px; } .topbarRight { order:3; } .dashboardQuickLinks, .officialQuickGrid, .themeOptions, .settingsDataActions { grid-template-columns:1fr; } .settingsOptionCard { padding:17px; } .settingsOptionHeader { flex-direction:column; } }\n      `}</style>
-
+        .theme-dark .serviceManagementHeader { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .serviceManagementHeader h2, .theme-dark .serviceDirectoryBlock h2 { color:#f1f5f9; }\n        .theme-dark .managedServiceMeta span { background:#1e293b; color:#94a3b8; }\n        .theme-dark .templateChip, .theme-dark .stageRow { background:#111827; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .documentChecklistItem { background:#172033; border-color:#334155; }\n        .theme-dark .documentChecklistItem strong { color:#f1f5f9; }\n        .theme-dark .documentChecklistItem.missing { background:#2b2516; }\n        .theme-dark .documentChecklistItem.received { background:#13271d; }\n        .theme-dark .tableDocumentProgress small { color:#64748b; }\n        .theme-dark .paymentActivityItem, .theme-dark .attentionItem { background:#172033; border-color:#334155; }\n        .theme-dark .paymentActivityItem strong, .theme-dark .attentionItem strong { color:#f1f5f9; }\n        @media (max-width:900px) { .globalSearchWrap { width:min(560px,58vw); } .dashboardQuickLinks, .officialQuickGrid, .settingsDataActions { grid-template-columns:repeat(2,minmax(0,1fr)); } }\n        @media (max-width:640px) { .globalSearchWrap { position:relative; left:auto; top:auto; transform:none; width:auto; flex:1; order:2; } .topbar { gap:9px; } .topbarRight { order:3; } .dashboardQuickLinks, .officialQuickGrid, .themeOptions, .settingsDataActions { grid-template-columns:1fr; } .settingsOptionCard { padding:17px; } .settingsOptionHeader { flex-direction:column; } }\n      `}</style>
       <div className={`appShell ${theme === "dark" ? "theme-dark" : theme === "emerald" ? "theme-emerald" : "theme-light"}`}>
       <Sidebar
         page={page}
@@ -4181,6 +5519,21 @@ ${JSON.stringify(customerContext)}`;
             />
           )}
 
+          {!isCustomer && page === "Print Jobs" && isOwnerOrAdmin && (
+            <PrintJobsPage workspace={workspace} />
+          )}
+
+          {!isCustomer && page === "Earnings" && isOwnerOrAdmin && (
+            <PrintEarningsPage workspace={workspace} />
+          )}
+
+          {!isCustomer && page === "Café QR" && isOwnerOrAdmin && (
+            <CafeQRPage
+              workspace={workspace}
+              businessProfile={businessProfile}
+            />
+          )}
+
           {!isCustomer && page === "Services" && (
             <Services
               customServices={serviceTemplates}
@@ -4218,6 +5571,10 @@ ${JSON.stringify(customerContext)}`;
             />
           )}
 
+          {!isCustomer && page === "Help & Support" && (
+            <HelpSupportPage />
+          )}
+
           {!isCustomer && page === "Follow-ups" && (
             <FollowUps
               tasks={tasks}
@@ -4248,14 +5605,14 @@ ${JSON.stringify(customerContext)}`;
           {!isCustomer && page === "Settings" && isOwnerOrAdmin && (
             <SettingsPage
               profile={businessProfile}
+              workspace={workspace}
               onSave={setBusinessProfile}
+              onSavePrintPricing={savePrintPricing}
               theme={theme}
               onThemeChange={setTheme}
               onExportBackup={exportBackup}
               onImportBackup={importBackup}
               onResetWorkspace={resetWorkspace}
-              aiApiKey={aiApiKey}
-              onAiApiKeyChange={setAiApiKey}
               subscription={subscription}
               workspaceUsage={workspaceUsage}
               billingLoading={billingLoading}
@@ -4263,9 +5620,6 @@ ${JSON.stringify(customerContext)}`;
               planLimits={planLimits}
               canManageWorkspace={isOwnerOrAdmin}
               subscriptionLifecycle={subscriptionLifecycle}
-              onUpgradeToPro={startProCheckout}
-              upgradeLoading={proCheckoutLoading}
-              onTestOneTimePayment={startTestOneTimePayment}
             />
           )}
         </main>
@@ -4314,7 +5668,7 @@ ${JSON.stringify(customerContext)}`;
       {aiCustomer && !isCustomer && (
         <AiCustomerSummaryModal
           customer={aiCustomer}
-          apiKeyConfigured={!!aiApiKey.trim()}
+          apiKeyConfigured={true}
           onClose={() => setAiCustomer(null)}
           onGenerate={generateAiCustomerSummary}
           onOpenSettings={() => {
@@ -4430,6 +5784,18 @@ function Sidebar({
         <LayoutDashboard size={18} />
       )
     },
+    ...(canManageWorkspace ? [{
+      name: "Print Jobs",
+      icon: <PrinterIcon size={18} />
+    }] : []),
+    ...(canManageWorkspace ? [{
+      name: "Earnings",
+      icon: <Banknote size={18} />
+    }] : []),
+    ...(canManageWorkspace ? [{
+      name: "Café QR",
+      icon: <QrCode size={18} />
+    }] : []),
     {
       name: "Services",
       icon: <Link2 size={18} />
@@ -4461,6 +5827,10 @@ function Sidebar({
       icon: (
         <Bookmark size={18} />
       )
+    },
+    {
+      name: "Help & Support",
+      icon: <MessageCircle size={18} />
     }
   ];
 
@@ -4474,6 +5844,15 @@ function Sidebar({
           }
         />
       )}
+
+      <style>{`
+        .sidebar { overflow:hidden !important; }
+        .sidebar .nav { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+        .sidebar .nav::-webkit-scrollbar { width:5px; }
+        .sidebar .nav::-webkit-scrollbar-thumb { background:rgba(148,163,184,.45); border-radius:999px; }
+        .sidebar .nav::-webkit-scrollbar-track { background:transparent; }
+        .sidebarBottom { flex:0 0 auto; }
+      `}</style>
 
       <aside
         className={`sidebar ${
@@ -4955,6 +6334,154 @@ function Dashboard({ tasks, setPage, setSelectedCustomer, businessProfile, links
   );
 }
 
+function HelpSupportPage() {
+  const faqs = [
+    {
+      q: "How does the café QR work?",
+      a: "Open Café QR from the sidebar and show the QR code to customers. They scan it to open your café's customer portal and submit print requests."
+    },
+    {
+      q: "How do I process a print request?",
+      a: "Open Print Jobs, review the customer's files and print settings, then move the job through Accepted, Printing and Completed."
+    },
+    {
+      q: "Why is the customer's estimated price different from the final amount?",
+      a: "The estimate is based on the uploaded file count and your configured pricing. You can enter the actual final amount when completing the job."
+    },
+    {
+      q: "How do I change print prices?",
+      a: "Go to Settings → Print Pricing, update the rates, and click Save Print Pricing. A confirmation appears when the changes are saved."
+    },
+    {
+      q: "How does Earnings work?",
+      a: "Earnings uses completed print jobs and recorded payments. Paid jobs contribute to collected revenue, while unpaid completed jobs remain outstanding."
+    },
+    {
+      q: "A customer says their job is stuck. What should I do?",
+      a: "Open Print Jobs, find the job using the customer name or Job ID, and check its current status. Update the workflow to the correct stage."
+    }
+  ];
+
+  const [openFaq, setOpenFaq] = useState(0);
+  const [messages, setMessages] = useState([
+    { role: "bot", text: "Hi! I’m the CyberCafe Helper assistant. Ask me about QR printing, print jobs, pricing, payments or earnings." }
+  ]);
+  const [input, setInput] = useState("");
+
+  const answerQuestion = (question) => {
+    const text = question.toLowerCase();
+    if (/qr|scan|customer portal/.test(text)) return faqs[0].a;
+    if (/print job|request|process|printing|accepted|completed/.test(text)) return faqs[1].a;
+    if (/price|pricing|estimate|amount|rate/.test(text)) return faqs[2].a;
+    if (/change.*price|settings|save.*pricing/.test(text)) return faqs[3].a;
+    if (/earning|revenue|payment|paid|unpaid|cash|upi|card/.test(text)) return faqs[4].a;
+    if (/stuck|problem|issue|not working|customer.*waiting/.test(text)) return faqs[5].a;
+    return "I can help with QR printing, print jobs, pricing, payments and earnings. Try asking: ‘How does the QR work?’ or ‘How do I process a print request?’";
+  };
+
+  const sendMessage = (event) => {
+    event?.preventDefault();
+    const question = input.trim();
+    if (!question) return;
+    const answer = answerQuestion(question);
+    setMessages((current) => [
+      ...current,
+      { role: "user", text: question },
+      { role: "bot", text: answer }
+    ]);
+    setInput("");
+  };
+
+  const quickAsk = (question) => {
+    setInput(question);
+    window.setTimeout(() => {
+      const answer = answerQuestion(question);
+      setMessages((current) => [
+        ...current,
+        { role: "user", text: question },
+        { role: "bot", text: answer }
+      ]);
+      setInput("");
+    }, 0);
+  };
+
+  return (
+    <div className="helpSupportPage">
+      <PageHeading
+        eyebrow="HELP & SUPPORT"
+        title="How can we help?"
+        subtitle="Quick answers for running your cyber café with CyberCafe Helper."
+      />
+
+      <div className="helpSupportGrid">
+        <section className="dashboardCard helpFaqCard">
+          <div className="helpCardHeader">
+            <div>
+              <span className="sectionEyebrow">FREQUENTLY ASKED</span>
+              <h2>FAQs</h2>
+            </div>
+            <div className="helpHeaderIcon"><CircleAlert size={17} /></div>
+          </div>
+
+          <div className="helpFaqList">
+            {faqs.map((faq, index) => (
+              <div className={`helpFaqItem ${openFaq === index ? "open" : ""}`} key={faq.q}>
+                <button type="button" onClick={() => setOpenFaq(openFaq === index ? -1 : index)}>
+                  <span>{faq.q}</span>
+                  <ChevronRight size={15} />
+                </button>
+                {openFaq === index && <div className="helpFaqAnswer">{faq.a}</div>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="dashboardCard helpChatCard">
+          <div className="helpCardHeader">
+            <div>
+              <span className="sectionEyebrow">QUICK HELP</span>
+              <h2>Support Assistant</h2>
+            </div>
+            <div className="helpChatIcon"><MessageCircle size={17} /></div>
+          </div>
+
+          <div className="helpChatMessages">
+            {messages.map((message, index) => (
+              <div className={`helpChatMessage ${message.role}`} key={`${message.role}-${index}`}>
+                <span>{message.role === "bot" ? "HELP" : "YOU"}</span>
+                <p>{message.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="helpQuickQuestions">
+            {[
+              "How does the QR work?",
+              "How do I process a print request?",
+              "How does Earnings work?"
+            ].map((question) => (
+              <button type="button" key={question} onClick={() => quickAsk(question)}>{question}</button>
+            ))}
+          </div>
+
+          <form className="helpChatForm" onSubmit={sendMessage}>
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Ask for help..."
+              aria-label="Ask for help"
+            />
+            <button type="submit" aria-label="Send help question" title="Send">
+              <ChevronRight size={17} />
+            </button>
+          </form>
+          <p className="helpChatNote">This assistant provides quick guidance from the app's built-in help topics.</p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function PageHeading({
   eyebrow,
   title,
@@ -5006,13 +6533,405 @@ function Stat({
   );
 }
 
-function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, onImportBackup, onResetWorkspace, aiApiKey, onAiApiKeyChange, subscription, workspaceUsage, billingLoading, billingError, planLimits, onUpgradeToPro, upgradeLoading, onTestOneTimePayment }) {
+
+function PrintEarningsPage({ workspace }) {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [period, setPeriod] = useState("30");
+
+  const loadEarnings = async () => {
+    if (!workspace?.id) return;
+    setLoading(true);
+    setError("");
+    try {
+      const { data: jobRows, error: jobsError } = await supabase
+        .from("print_jobs")
+        .select("id, customer_name, status, color_mode, copies, paper_size, duplex, created_at, completed_at, final_amount, payment_method, payment_status, paid_at, payment_note")
+        .eq("workspace_id", workspace.id)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false });
+
+      if (jobsError) throw jobsError;
+
+      const rows = jobRows || [];
+      if (!rows.length) {
+        setJobs([]);
+        return;
+      }
+
+      const jobIds = rows.map((job) => job.id);
+      const { data: fileRows, error: filesError } = await supabase
+        .from("print_job_files")
+        .select("id, print_job_id")
+        .in("print_job_id", jobIds);
+
+      if (filesError) throw filesError;
+
+      const fileCounts = (fileRows || []).reduce((acc, file) => {
+        acc[file.print_job_id] = (acc[file.print_job_id] || 0) + 1;
+        return acc;
+      }, {});
+
+      setJobs(rows.map((job) => ({
+        ...job,
+        fileCount: fileCounts[job.id] || 0,
+        estimatedAmount: calculatePrintEstimate({
+          workspace,
+          colorMode: job.color_mode,
+          paperSize: job.paper_size,
+          copies: job.copies,
+          duplex: job.duplex,
+          fileCount: fileCounts[job.id] || 0
+        }),
+        amount: job.final_amount != null ? Number(job.final_amount) : 0,
+        isPaid: job.payment_status === "paid"
+      })));
+    } catch (err) {
+      console.error("Print earnings load failed:", err);
+      setError(err?.message || "Could not load print earnings.");
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEarnings();
+  }, [workspace?.id, workspace?.print_bw_price, workspace?.print_color_price, workspace?.print_a3_bw_price, workspace?.print_a3_color_price, workspace?.print_duplex_discount]);
+
+  const periodDays = period === "7" ? 7 : period === "30" ? 30 : null;
+  const cutoff = useMemo(() => {
+    if (!periodDays) return null;
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (periodDays - 1));
+    return date;
+  }, [periodDays]);
+
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      if (!cutoff) return true;
+      const completedAt = new Date(job.completed_at || job.created_at);
+      return completedAt.getTime() >= cutoff.getTime();
+    });
+  }, [jobs, cutoff]);
+
+  const totalEarnings = filteredJobs.filter((job) => job.isPaid).filter((job) => job.isPaid)
+        .reduce((sum, job) => sum + Number(job.amount || 0), 0);
+  const outstandingAmount = filteredJobs.filter((job) => !job.isPaid).reduce((sum, job) => sum + Number(job.amount || 0), 0);
+  const completedCount = filteredJobs.length;
+  const paidCount = filteredJobs.filter((job) => job.isPaid).length;
+  const averageOrder = paidCount ? totalEarnings / paidCount : 0;
+  const totalUnits = filteredJobs.reduce(
+    (sum, job) => sum + (Math.max(0, Number(job.fileCount) || 0) * Math.max(1, Number(job.copies) || 1)),
+    0
+  );
+
+  const dailyData = useMemo(() => {
+    const days = period === "7" ? 7 : 7;
+    const result = [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      const key = date.toISOString().slice(0, 10);
+      const amount = filteredJobs
+        .filter((job) => new Date(job.completed_at || job.created_at).toISOString().slice(0, 10) === key)
+        .reduce((sum, job) => sum + Number(job.amount || 0), 0);
+
+      result.push({
+        key,
+        label: date.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+        amount
+      });
+    }
+    return result;
+  }, [filteredJobs, period]);
+
+  const maxDaily = Math.max(...dailyData.map((item) => item.amount), 1);
+
+  const formatMoney = (value) => `₹${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  })}`;
+
+  const formatJobDate = (value) => value
+    ? new Date(value).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      })
+    : "—";
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", paddingBottom: 24 }}>
+      <PageHeading
+        eyebrow="PRINT EARNINGS"
+        title="Earnings"
+        subtitle="Track actual payments received from completed QR print jobs."
+      />
+
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        flexWrap: "wrap",
+        marginBottom: 18
+      }}>
+        <div style={{
+          padding: "10px 13px",
+          borderRadius: 12,
+          background: "#fff7ed",
+          border: "1px solid #fed7aa",
+          color: "#9a3412",
+          fontSize: 11,
+          lineHeight: 1.5
+        }}>
+          <strong>Actual revenue:</strong> earnings include only completed jobs marked as paid. Unpaid completed jobs remain outstanding.
+        </div>
+
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {[
+            ["7", "Last 7 days"],
+            ["30", "Last 30 days"],
+            ["all", "All time"]
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPeriod(value)}
+              className={period === value ? "primaryButton" : "secondaryButton"}
+              style={{ padding: "9px 12px", fontSize: 10 }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error && (
+        <div style={{
+          marginBottom: 16,
+          padding: 13,
+          borderRadius: 12,
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          color: "#b91c1c",
+          fontSize: 12
+        }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 12,
+        marginBottom: 18
+      }}>
+        {[
+          ["Collected revenue", formatMoney(totalEarnings), "Paid completed jobs"],
+          ["Outstanding", formatMoney(outstandingAmount), "Completed but unpaid"],
+          ["Paid jobs", paidCount.toLocaleString("en-IN"), `of ${completedCount.toLocaleString("en-IN")} completed`],
+          ["Average paid order", formatMoney(averageOrder), "Per paid job"]
+        ].map(([label, value, note]) => (
+          <div key={label} className="dashboardCard" style={{ padding: 18 }}>
+            <div style={{ color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".07em" }}>
+              {label}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 25, fontWeight: 900, color: "#0f172a" }}>
+              {loading ? "…" : value}
+            </div>
+            <div style={{ marginTop: 4, color: "#94a3b8", fontSize: 10 }}>
+              {note}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+        gap: 18,
+        alignItems: "start"
+      }}>
+        <section className="dashboardCard" style={{ padding: 22 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <div>
+              <div className="sectionEyebrow">RECENT TREND</div>
+              <h3 style={{ margin: "5px 0 0", fontSize: 17 }}>Daily print earnings</h3>
+            </div>
+            <TrendingUp size={18} style={{ color: "#2563eb" }} />
+          </div>
+
+          {loading ? (
+            <div style={{ padding: "42px 10px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>Loading earnings…</div>
+          ) : (
+            <div style={{
+              height: 220,
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 9,
+              padding: "10px 2px 0"
+            }}>
+              {dailyData.map((item) => (
+                <div key={item.key} style={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  alignItems: "center",
+                  gap: 6
+                }}>
+                  <span style={{
+                    fontSize: 9,
+                    color: item.amount ? "#334155" : "#cbd5e1",
+                    fontWeight: 800,
+                    whiteSpace: "nowrap"
+                  }}>
+                    {item.amount ? formatMoney(item.amount) : "₹0"}
+                  </span>
+                  <div
+                    title={`${item.label}: ${formatMoney(item.amount)}`}
+                    style={{
+                      width: "100%",
+                      maxWidth: 52,
+                      height: `${Math.max(6, (item.amount / maxDaily) * 145)}px`,
+                      borderRadius: "8px 8px 4px 4px",
+                      background: item.amount ? "#2563eb" : "#e2e8f0"
+                    }}
+                  />
+                  <span style={{ fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="dashboardCard" style={{ padding: 22 }}>
+          <div className="sectionEyebrow">BREAKDOWN</div>
+          <h3 style={{ margin: "5px 0 16px", fontSize: 17 }}>What customers printed</h3>
+
+          {filteredJobs.length === 0 ? (
+            <div style={{
+              padding: "34px 10px",
+              textAlign: "center",
+              color: "#94a3b8",
+              fontSize: 12
+            }}>
+              No completed print jobs in this period.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                ["B&W", filteredJobs.filter((job) => job.color_mode === "bw").length],
+                ["Color", filteredJobs.filter((job) => job.color_mode === "color").length],
+                ["A4", filteredJobs.filter((job) => job.paper_size === "A4").length],
+                ["A3", filteredJobs.filter((job) => job.paper_size === "A3").length],
+                ["Duplex", filteredJobs.filter((job) => job.duplex).length]
+              ].map(([label, count]) => (
+                <div key={label} style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "9px 11px",
+                  borderRadius: 10,
+                  background: "#f8fafc",
+                  border: "1px solid #eef2f7"
+                }}>
+                  <span style={{ color: "#475569", fontSize: 11 }}>{label}</span>
+                  <strong style={{ fontSize: 12 }}>{count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="dashboardCard" style={{ marginTop: 18, overflow: "hidden" }}>
+        <div style={{ padding: "20px 22px 15px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div>
+            <div className="sectionEyebrow">COMPLETED JOBS</div>
+            <h3 style={{ margin: "5px 0 0", fontSize: 17 }}>Earnings history</h3>
+          </div>
+          <span style={{ color: "#64748b", fontSize: 10 }}>
+            {filteredJobs.length} job{filteredJobs.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 28, textAlign: "center", color: "#94a3b8", fontSize: 12 }}>Loading history…</div>
+        ) : filteredJobs.length === 0 ? (
+          <div style={{ padding: 38, textAlign: "center", color: "#94a3b8", fontSize: 12 }}>
+            <Banknote size={25} style={{ marginBottom: 8, opacity: .55 }} />
+            <div>No completed print jobs yet.</div>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 650 }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  {["Job", "Customer", "Print", "Units", "Completed", "Amount"].map((heading) => (
+                    <th key={heading} style={{ textAlign: "left", padding: "11px 16px", fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredJobs.map((job) => (
+                  <tr key={job.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                    <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 10, fontWeight: 800 }}>
+                      #{job.id.slice(0, 8).toUpperCase()}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700 }}>
+                      {job.customer_name || "Customer"}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: "#64748b" }}>
+                      {(job.color_mode === "color" ? "Color" : "B&W")} · {job.paper_size || "A4"} · {job.duplex ? "Duplex" : "Single"}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: "#475569" }}>
+                      {(Math.max(0, Number(job.fileCount) || 0) * Math.max(1, Number(job.copies) || 1)).toLocaleString("en-IN")}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: "#64748b", whiteSpace: "nowrap" }}>
+                      {formatJobDate(job.completed_at)}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, fontWeight: 900, color: "#0f172a", whiteSpace: "nowrap" }}>
+                      {formatMoney(job.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SettingsPage({ profile, workspace, onSave, onSavePrintPricing, theme, onThemeChange, onExportBackup, onImportBackup, onResetWorkspace, subscription, workspaceUsage, billingLoading, billingError, planLimits }) {
   const [form, setForm] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
+  const [pricingForm, setPricingForm] = useState(() => getPrintPricing(workspace));
+  const [pricingSaved, setPricingSaved] = useState(false);
+  const [pricingSaving, setPricingSaving] = useState(false);
+  const [pricingSaveConfirmation, setPricingSaveConfirmation] = useState(false);
   const fileInputRef = React.useRef(null);
 
   useEffect(() => setForm(profile), [profile]);
+  useEffect(() => setPricingForm(getPrintPricing(workspace)), [workspace]);
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -5033,6 +6952,30 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
     window.setTimeout(() => setSaved(false), 1800);
   };
 
+  const handlePricingSubmit = async (event) => {
+    event.preventDefault();
+    setPricingSaving(true);
+    try {
+      const cleaned = {
+        bwPrice: Math.max(0, Number(pricingForm.bwPrice) || 0),
+        colorPrice: Math.max(0, Number(pricingForm.colorPrice) || 0),
+        a3BwPrice: Math.max(0, Number(pricingForm.a3BwPrice) || 0),
+        a3ColorPrice: Math.max(0, Number(pricingForm.a3ColorPrice) || 0),
+        duplexDiscount: Math.min(100, Math.max(0, Number(pricingForm.duplexDiscount) || 0))
+      };
+      await onSavePrintPricing?.(cleaned);
+      setPricingForm(cleaned);
+      setPricingSaved(true);
+      setPricingSaveConfirmation(true);
+      window.setTimeout(() => setPricingSaved(false), 1800);
+      window.setTimeout(() => setPricingSaveConfirmation(false), 2200);
+    } catch (error) {
+      window.alert(error?.message || "Could not save print pricing.");
+    } finally {
+      setPricingSaving(false);
+    }
+  };
+
   return (
     <div className="settingsPage">
       <PageHeading eyebrow="WORKSPACE SETTINGS" title="Settings" subtitle="Manage your business identity, workspace data and subscription." />
@@ -5042,13 +6985,13 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
           <Settings size={16} />
           <span><strong>Business Profile</strong><small>Identity & receipts</small></span>
         </button>
+        <button type="button" className={`settingsTab ${activeTab === "pricing" ? "active" : ""}`} onClick={() => setActiveTab("pricing")} role="tab" aria-selected={activeTab === "pricing"}>
+          <IndianRupee size={16} />
+          <span><strong>Print Pricing</strong><small>Customer estimates</small></span>
+        </button>
         <button type="button" className={`settingsTab ${activeTab === "data" ? "active" : ""}`} onClick={() => setActiveTab("data")} role="tab" aria-selected={activeTab === "data"}>
           <Database size={16} />
           <span><strong>Data & Backup</strong><small>Import & export</small></span>
-        </button>
-        <button type="button" className={`settingsTab ${activeTab === "ai" ? "active" : ""}`} onClick={() => setActiveTab("ai")} role="tab" aria-selected={activeTab === "ai"}>
-          <Sparkles size={16} />
-          <span><strong>AI Assistant</strong><small>Gemini configuration</small></span>
         </button>
         <button type="button" className={`settingsTab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")} role="tab" aria-selected={activeTab === "billing"}>
           <Wallet size={16} />
@@ -5071,6 +7014,23 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
         </form>
       )}
 
+
+      {activeTab === "pricing" && (
+        <form className="settingsPanel settingsTabPanel" onSubmit={handlePricingSubmit}>
+          <div className="settingsIntro"><div className="settingsIntroIcon"><IndianRupee size={20} /></div><div><h3>Print Pricing</h3><p>Set the café's default print rates used to show customers an estimated price before they submit.</p></div></div>
+          <div style={{ padding: "11px 13px", marginBottom: 16, borderRadius: 10, background: "#eff6ff", border: "1px solid #dbeafe", color: "#1e40af", fontSize: 10, lineHeight: 1.55 }}>
+            <strong>MVP pricing model:</strong> the estimate is based on uploaded files × copies. The current upload system does not inspect page counts inside PDFs or Word documents, so this is an estimate rather than a final invoice.
+          </div>
+          <div className="settingsGrid">
+            <label>B&W · A4 / standard (₹ per file)<input type="number" min="0" step="0.5" value={pricingForm.bwPrice} onChange={(e) => setPricingForm((prev) => ({ ...prev, bwPrice: e.target.value }))} /></label>
+            <label>Color · A4 / standard (₹ per file)<input type="number" min="0" step="0.5" value={pricingForm.colorPrice} onChange={(e) => setPricingForm((prev) => ({ ...prev, colorPrice: e.target.value }))} /></label>
+            <label>B&W · A3 (₹ per file)<input type="number" min="0" step="0.5" value={pricingForm.a3BwPrice} onChange={(e) => setPricingForm((prev) => ({ ...prev, a3BwPrice: e.target.value }))} /></label>
+            <label>Color · A3 (₹ per file)<input type="number" min="0" step="0.5" value={pricingForm.a3ColorPrice} onChange={(e) => setPricingForm((prev) => ({ ...prev, a3ColorPrice: e.target.value }))} /></label>
+            <label>Duplex discount (%)<input type="number" min="0" max="100" step="1" value={pricingForm.duplexDiscount} onChange={(e) => setPricingForm((prev) => ({ ...prev, duplexDiscount: e.target.value }))} /></label>
+          </div>
+          <div className="settingsActions"><span className={pricingSaved ? "settingsSaved" : "settingsHint"}>{pricingSaved ? "✓ Print pricing saved" : "Used by the QR customer portal"}</span><button className="primaryButton" type="submit" disabled={pricingSaving}><CheckCircle2 size={16} /> {pricingSaving ? "Saving…" : "Save Print Pricing"}</button></div>
+        </form>
+      )}
 
       {activeTab === "data" && (
         <section className="settingsOptionCard settingsTabPanel">
@@ -5131,7 +7091,7 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
                             <h3>{planName}</h3>
                             <span className={`billingStatus ${statusClass}`}>{statusLabel}</span>
                           </div>
-                          <p>{status === "trial" ? `${trialDays} ${trialDays === 1 ? "day" : "days"} remaining in your free trial` : status === "active" ? "Your workspace is on an active subscription." : status === "expired" ? "Your trial has ended. Upgrade to continue creating new workspace data." : "Subscription status: " + status}</p>
+                          <p>{status === "trial" ? `${trialDays} ${trialDays === 1 ? "day" : "days"} remaining in your free trial` : status === "active" ? "Your workspace is on an active subscription." : status === "expired" ? "Your trial has ended. Paid plans are coming soon. New workspace resources may be paused after the trial ends." : "Subscription status: " + status}</p>
                         </div>
                       </div>
                       <div className="billingPlanExpiry">
@@ -5169,58 +7129,14 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
                       })}
                     </div>
 
-                    <div className="billingUpgradeCard">
+                    <div className="billingComingSoonCard">
                       <div className="billingUpgradeIcon"><Sparkles size={19} /></div>
                       <div className="billingUpgradeCopy">
-                        <strong>Upgrade to Pro</strong>
-                        <span>Unlock higher workspace limits with Razorpay. You are currently using Razorpay Test Mode, so no real money is charged.</span>
+                        <strong>Pro plan coming soon</strong>
+                        <span>We’re preparing paid plans and billing. Your current workspace and free-trial access are available without payment.</span>
                       </div>
-                      <button
-                        type="button"
-                        className="billingUpgradeButton"
-                        disabled={upgradeLoading}
-                        aria-busy={upgradeLoading}
-                        onClick={async () => {
-                          if (upgradeLoading) return;
-
-                          try {
-                            await onUpgradeToPro?.();
-                            window.alert("Pro subscription activated successfully.");
-                          } catch (error) {
-                            console.error("Razorpay checkout failed:", error);
-                            window.alert(error?.message || "Could not complete the Pro upgrade.");
-                          }
-                        }}
-                      >
-                        {upgradeLoading ? "Opening Razorpay…" : "Upgrade to Pro"} {!upgradeLoading && <ChevronRight size={14} />}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondaryButton"
-                        onClick={async () => {
-                          try {
-                            await onTestOneTimePayment?.();
-                            window.alert(
-                              "₹10 one-time Razorpay payment completed successfully."
-                            );
-                          } catch (error) {
-                            console.error(
-                              "Razorpay one-time payment test failed:",
-                              error
-                            );
-                            window.alert(
-                              error?.message ||
-                              "Could not complete the ₹10 test payment."
-                            );
-                          }
-                        }}
-                      >
-                        Test ₹10 One-Time Payment
-                      </button>
+                      <span className="billingComingSoonBadge">COMING SOON</span>
                     </div>
-
-                    <div className="billingFinePrint">Razorpay Test Mode is enabled. Your Pro access is granted only after the payment response is verified server-side.</div>
                   </>
                 );
               })()}
@@ -5229,28 +7145,55 @@ function SettingsPage({ profile, onSave, theme, onThemeChange, onExportBackup, o
         </section>
       )}
 
-      {activeTab === "ai" && (
-        <section className="settingsOptionCard aiSettingsCard settingsTabPanel">
-          <div className="settingsOptionHeader">
-            <div>
-              <span className="sectionEyebrow">AI ASSISTANT</span>
-              <h2>Gemini AI</h2>
-              <p>Connect Gemini to generate customer summaries and practical next actions from your CRM data.</p>
+      {pricingSaveConfirmation && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Changes saved"
+          onClick={() => setPricingSaveConfirmation(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            background: "rgba(15, 23, 42, 0.42)",
+            backdropFilter: "blur(3px)"
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(380px, 100%)",
+              padding: "24px 22px",
+              borderRadius: 18,
+              background: "#ffffff",
+              boxShadow: "0 20px 60px rgba(15, 23, 42, 0.24)",
+              textAlign: "center",
+              border: "1px solid #e2e8f0"
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                margin: "0 auto 12px",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#dcfce7",
+                color: "#15803d"
+              }}
+            >
+              <CheckCircle2 size={26} />
             </div>
-            <Sparkles size={21} />
+            <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#0f172a" }}>Changes saved</h3>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "#64748b" }}>Your print pricing has been updated successfully.</p>
           </div>
-          <label className="settingsFull aiKeyField">Gemini API Key
-            <input type="password" value={aiApiKey} onChange={(e) => onAiApiKeyChange(e.target.value.trim())} placeholder="Paste your Gemini API key" autoComplete="off" />
-          </label>
-          <div className="aiSettingsNote">
-            <CircleAlert size={15} />
-            <span>For this local MVP, the key is stored in this browser's localStorage. Do not use a personal API key in a public/shared deployment. For production, move the Gemini call to your server and keep the key server-side.</span>
-          </div>
-          <div className="settingsActions">
-            <span className={aiApiKey ? "settingsSaved" : "settingsHint"}>{aiApiKey ? "✓ Gemini key configured" : "Add a key to enable AI summaries"}</span>
-            <a className="secondaryButton" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Get API Key <ExternalLink size={14} /></a>
-          </div>
-        </section>
+        </div>
       )}
     </div>
   );
@@ -8312,8 +10255,16 @@ function AppRoot() {
   const [workspace, setWorkspace] = useState(null);
   const [workspaceRole, setWorkspaceRole] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [publicMode, setPublicMode] = useState("landing");
+  const [publicMode, setPublicMode] = useState(() => {
+    if (typeof window === "undefined") return "landing";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mode") === "customer" && params.get("workspace") ? "qr" : "landing";
+  });
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [qrWorkspaceId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("workspace") || "";
+  });
 
   // Emergency startup fallback: the UI must never remain on the loading screen.
   useEffect(() => {
@@ -8453,7 +10404,7 @@ function AppRoot() {
         if (customerAccess?.workspace_id) {
           const { data: customerWorkspace, error: customerWorkspaceError } = await supabase
             .from("workspaces")
-            .select("id, name, owner_id, phone, address, gstin, created_at, updated_at")
+            .select("id, name, owner_id, phone, address, gstin, print_bw_price, print_color_price, print_a3_bw_price, print_a3_color_price, print_duplex_discount, created_at, updated_at")
             .eq("id", customerAccess.workspace_id)
             .maybeSingle();
 
@@ -8487,7 +10438,7 @@ function AppRoot() {
         if (membership?.workspace_id) {
           const { data: memberWorkspace, error: memberWorkspaceError } = await supabase
             .from("workspaces")
-            .select("id, name, owner_id, phone, address, gstin, created_at, updated_at")
+            .select("id, name, owner_id, phone, address, gstin, print_bw_price, print_color_price, print_a3_bw_price, print_a3_color_price, print_duplex_discount, created_at, updated_at")
             .eq("id", membership.workspace_id)
             .maybeSingle();
 
@@ -8540,7 +10491,7 @@ function AppRoot() {
 
         const { data, error } = await supabase
           .from("workspaces")
-          .select("id, name, owner_id, phone, address, gstin, created_at, updated_at")
+          .select("id, name, owner_id, phone, address, gstin, print_bw_price, print_color_price, print_a3_bw_price, print_a3_color_price, print_duplex_discount, created_at, updated_at")
           .eq("owner_id", user.id)
           .maybeSingle();
 
@@ -8601,6 +10552,16 @@ function AppRoot() {
 
   if (user) {
     return <App user={user} onSignOut={signOut} workspace={workspace} userProfile={userProfile} workspaceRole={workspaceRole} />;
+  }
+
+  if (publicMode === "qr" && qrWorkspaceId) {
+    return (
+      <QRCustomerLanding
+        workspaceId={qrWorkspaceId}
+        onSignIn={() => setPublicMode("login")}
+        onSignUp={() => setPublicMode("signup")}
+      />
+    );
   }
 
   if (publicMode === "login") {
