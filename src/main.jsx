@@ -2156,6 +2156,7 @@ function CafeQRPage({ workspace, businessProfile }) {
   const qrUrl = workspaceId
     ? `${baseUrl}/?workspace=${encodeURIComponent(workspaceId)}&mode=customer`
     : "";
+  const [copied, setCopied] = useState(false);
 
   const downloadQr = () => {
     const svg = document.querySelector("#cafe-qr-code svg");
@@ -2172,6 +2173,18 @@ function CafeQRPage({ workspace, businessProfile }) {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const copyQrLink = async () => {
+    if (!qrUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(qrUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch (error) {
+      console.error("Could not copy QR link:", error);
+    }
   };
 
   const printQr = () => {
@@ -2287,10 +2300,28 @@ function CafeQRPage({ workspace, businessProfile }) {
               <Download size={16} />
               Download QR
             </button>
+            <button className="secondaryButton" onClick={copyQrLink} disabled={!workspaceId}>
+              {copied ? <CheckCircle2 size={16} /> : <Link2 size={16} />}
+              {copied ? "Link copied" : "Copy link"}
+            </button>
             <button className="primaryButton" onClick={printQr} disabled={!workspaceId}>
               <FileText size={16} />
               Print QR
             </button>
+          </div>
+
+          <div style={{
+            marginTop: 16,
+            padding: "10px 12px",
+            borderRadius: 11,
+            background: "#f8fafc",
+            border: "1px solid #e5e7eb",
+            color: "#64748b",
+            fontSize: 10,
+            lineHeight: 1.5,
+            textAlign: "left"
+          }}>
+            <strong style={{ color: "#334155" }}>Tip:</strong> Print this QR and place it near the counter so customers can send documents from their phones.
           </div>
         </section>
 
