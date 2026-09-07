@@ -3413,36 +3413,6 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
             <p style={{ margin: "7px 0 0", color: "#475569", fontSize: 11 }}>{statusMeta.text}</p>
           </div>
 
-          {(() => {
-            const stages = [
-              { key: "pending", label: "Received", icon: "1" },
-              { key: "accepted", label: "Accepted", icon: "2" },
-              { key: "printing", label: "Printing", icon: "3" },
-              { key: "completed", label: "Completed", icon: "4" }
-            ];
-            const order = { pending: 0, accepted: 1, printing: 2, completed: 3 };
-            const currentIndex = order[status] ?? 0;
-            const rejected = status === "rejected";
-
-            return (
-              <div className={`qrTrackingTimeline ${rejected ? "rejected" : ""}`}>
-                {stages.map((stage, index) => {
-                  const done = !rejected && currentIndex >= index;
-                  const current = !rejected && currentIndex === index;
-                  return (
-                    <React.Fragment key={stage.key}>
-                      <div className={`qrTrackingStage ${done ? "done" : ""} ${current ? "current" : ""}`}>
-                        <div className="qrTrackingDot">{done ? <CheckCircle2 size={13} strokeWidth={3} /> : stage.icon}</div>
-                        <span>{stage.label}</span>
-                      </div>
-                      {index < stages.length - 1 && <div className={`qrTrackingLine ${!rejected && currentIndex > index ? "done" : ""}`} />}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
           {trackedJob?.estimated_price != null && (
             <div style={{ marginTop: 14, padding: 15, borderRadius: 14, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
               <div style={{ color: "#15803d", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Estimated price</div>
