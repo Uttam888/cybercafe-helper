@@ -10682,16 +10682,24 @@ function AppRoot() {
     return <ResetPasswordScreen onComplete={() => { setRecoveryMode(false); setUser(null); setPublicMode("login"); supabase.auth.signOut(); }} />;
   }
 
-  if (user) {
-    return <App user={user} onSignOut={signOut} workspace={workspace} userProfile={userProfile} workspaceRole={workspaceRole} />;
-  }
-
   if (publicMode === "qr" && qrWorkspaceId) {
     return (
       <QRCustomerLanding
         workspaceId={qrWorkspaceId}
         onSignIn={() => setPublicMode("login")}
         onSignUp={() => setPublicMode("signup")}
+      />
+    );
+  }
+
+  if (user) {
+    return (
+      <App
+        user={user}
+        onSignOut={signOut}
+        workspace={workspace}
+        userProfile={userProfile}
+        workspaceRole={workspaceRole}
       />
     );
   }
