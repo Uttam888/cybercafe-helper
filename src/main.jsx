@@ -3398,16 +3398,16 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
     };
 
     return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "#f8fafc", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-        <div className="dashboardCard" style={{ width: "100%", maxWidth: 520, padding: 30 }}>
+      <div className="qrCustomerPortal qrCustomerPortalSuccess" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20, background: "#f8fafc", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+        <div className="dashboardCard qrSuccessCard" style={{ width: "100%", maxWidth: 520, padding: 30 }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 60, height: 60, margin: "0 auto 16px", borderRadius: 18, display: "grid", placeItems: "center", background: statusMeta.bg, color: statusMeta.color }}><PrinterIcon size={30} /></div>
             <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>PRINT REQUEST</span>
-            <h1 style={{ margin: "8px 0 6px", fontSize: 26 }}>{workspaceInfo?.name || "Café"}</h1>
+            <h1 className="qrSuccessTitle" style={{ margin: "8px 0 6px", fontSize: 26 }}>{workspaceInfo?.name || "Café"}</h1>
             <p style={{ margin: "0 auto", color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>Track your request here. This page checks for status updates automatically.</p>
           </div>
 
-          <div style={{ marginTop: 22, padding: 18, borderRadius: 16, background: statusMeta.bg, border: `1px solid ${statusMeta.color}22`, textAlign: "center" }}>
+          <div className="qrSuccessStatus" style={{ marginTop: 22, padding: 18, borderRadius: 16, background: statusMeta.bg, border: `1px solid ${statusMeta.color}22`, textAlign: "center" }}>
             <div style={{ color: "#64748b", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Current status</div>
             <strong style={{ display: "block", marginTop: 6, color: statusMeta.color, fontSize: 20 }}>{statusMeta.label}</strong>
             <p style={{ margin: "7px 0 0", color: "#475569", fontSize: 11 }}>{statusMeta.text}</p>
@@ -3437,9 +3437,231 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", padding: "24px 16px 40px", background: "#f8fafc", color: "#0f172a", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <div style={{ width: "100%", maxWidth: 560, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
+    <>
+      <style>{`
+        .qrCustomerPortal,
+        .qrCustomerPortal * {
+          box-sizing: border-box;
+        }
+
+        .qrCustomerPortal {
+          width: 100%;
+          overflow-x: hidden;
+          -webkit-text-size-adjust: 100%;
+        }
+
+        .qrCustomerPortal input,
+        .qrCustomerPortal select,
+        .qrCustomerPortal textarea,
+        .qrCustomerPortal button {
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .qrCustomerPortal .input {
+          min-height: 46px;
+          border-radius: 11px;
+        }
+
+        .qrCustomerPortal .qrPortalContainer {
+          width: 100%;
+          max-width: 560px;
+          margin: 0 auto;
+        }
+
+        .qrCustomerPortal .qrPortalForm {
+          width: 100%;
+        }
+
+        .qrCustomerPortal .qrPortalTwoColumn {
+          width: 100%;
+        }
+
+        .qrCustomerPortal .qrPortalPrice {
+          width: 100%;
+        }
+
+        @media (max-width: 600px) {
+          .qrCustomerPortal {
+            min-height: 100dvh !important;
+            padding: 16px 12px 28px !important;
+          }
+
+          .qrCustomerPortal .qrPortalContainer {
+            max-width: 100%;
+          }
+
+          .qrCustomerPortal .qrPortalHeader {
+            margin-bottom: 14px !important;
+          }
+
+          .qrCustomerPortal .qrPortalHeader h1 {
+            font-size: 23px !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere;
+          }
+
+          .qrCustomerPortal .qrPortalHeader p {
+            font-size: 11px !important;
+            line-height: 1.5 !important;
+          }
+
+          .qrCustomerPortal .qrPortalForm {
+            padding: 15px !important;
+            border-radius: 16px !important;
+          }
+
+          .qrCustomerPortal .qrPortalTwoColumn {
+            grid-template-columns: 1fr !important;
+            gap: 11px !important;
+          }
+
+          .qrCustomerPortal .input {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 48px !important;
+            padding: 12px 13px !important;
+            font-size: 16px !important;
+            border-radius: 12px !important;
+          }
+
+          .qrCustomerPortal select.input {
+            padding-right: 34px !important;
+          }
+
+          .qrCustomerPortal textarea.input {
+            min-height: 84px;
+          }
+
+          .qrCustomerPortal .qrUploadBox {
+            padding: 16px 12px !important;
+          }
+
+          .qrCustomerPortal .qrUploadHint {
+            line-height: 1.45 !important;
+          }
+
+          .qrCustomerPortal .qrFileRow {
+            min-width: 0;
+          }
+
+          .qrCustomerPortal .qrFileName {
+            max-width: 100%;
+          }
+
+          .qrCustomerPortal .qrFileFooter {
+            gap: 8px !important;
+            flex-wrap: wrap;
+          }
+
+          .qrCustomerPortal .qrPortalPrice {
+            align-items: center !important;
+            padding: 13px !important;
+            gap: 10px !important;
+          }
+
+          .qrCustomerPortal .qrPortalPrice > div:first-child {
+            min-width: 0;
+          }
+
+          .qrCustomerPortal .qrPortalPriceAmount {
+            white-space: nowrap;
+          }
+
+          .qrCustomerPortal .qrPortalPriceAmount {
+            flex-shrink: 0;
+            font-size: 19px !important;
+          }
+
+          .qrCustomerPortal .primaryButton {
+            width: 100%;
+            min-height: 50px;
+            padding: 12px 16px !important;
+            font-size: 14px;
+            border-radius: 12px !important;
+          }
+
+          .qrCustomerPortal .qrFileRow {
+            width: 100%;
+            overflow: hidden;
+          }
+
+          .qrCustomerPortal .qrFileName {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .qrCustomerPortalSuccess {
+            display: block !important;
+            padding: 16px 12px 28px !important;
+          }
+
+          .qrCustomerPortalSuccess .qrSuccessCard {
+            max-width: 100% !important;
+            padding: 20px 15px !important;
+            border-radius: 16px !important;
+          }
+
+          .qrCustomerPortalSuccess .qrSuccessTitle {
+            font-size: 23px !important;
+            line-height: 1.2 !important;
+            overflow-wrap: anywhere;
+          }
+
+          .qrCustomerPortalSuccess .qrSuccessStatus {
+            padding: 14px !important;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .qrCustomerPortal .qrPortalHeader h1 {
+            font-size: 22px !important;
+          }
+
+          .qrCustomerPortal .qrPortalHeader p {
+            max-width: 320px;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
+
+          .qrCustomerPortal .qrPortalForm {
+            padding: 13px !important;
+          }
+
+          .qrCustomerPortal .qrPortalTwoColumn {
+            gap: 10px !important;
+          }
+
+          .qrCustomerPortal .qrPortalPrice {
+            align-items: flex-start !important;
+          }
+
+          .qrCustomerPortal .qrPortalPriceAmount {
+            font-size: 18px !important;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .qrCustomerPortal {
+            padding-left: 9px !important;
+            padding-right: 9px !important;
+          }
+
+          .qrCustomerPortal .qrPortalForm,
+          .qrCustomerPortalSuccess .qrSuccessCard {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+
+          .qrCustomerPortal .qrPortalHeader h1,
+          .qrCustomerPortalSuccess .qrSuccessTitle {
+            font-size: 21px !important;
+          }
+        }
+      `}</style>
+      <div className="qrCustomerPortal" style={{ minHeight: "100vh", padding: "24px 16px 40px", background: "#f8fafc", color: "#0f172a", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div className="qrPortalContainer" style={{ width: "100%", maxWidth: 560, margin: "0 auto" }}>
+        <div className="qrPortalHeader" style={{ textAlign: "center", marginBottom: 18 }}>
           <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 16, display: "grid", placeItems: "center", background: "#eff6ff", color: "#2563eb" }}><QrCode size={25} /></div>
           <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>CYBERCAFE HELPER</span>
           <h1 style={{ margin: "7px 0 5px", fontSize: 27 }}>{loading ? "Opening café portal…" : workspaceInfo?.name || "Customer Print Portal"}</h1>
@@ -3451,19 +3673,19 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
         )}
 
         {workspaceInfo && (
-          <form onSubmit={submitJob} className="dashboardCard" style={{ padding: 20 }}>
+          <form onSubmit={submitJob} className="dashboardCard qrPortalForm" style={{ padding: 20 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Your name<input className="input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Enter your name" required /></label>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Phone number <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span><input className="input" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="9876543210" inputMode="tel" /></label>
 
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>Documents</div>
-                <label style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
+                <label className="qrUploadBox" style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
                   <Upload size={22} style={{ color: "#2563eb" }} />
                   <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length
   ? `${files.length} file${files.length > 1 ? "s" : ""} selected`
   : "Tap to choose documents"}</strong>
-                  <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files · 10 MB each</span>
+                  <span className="qrUploadHint" style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files · 10 MB each</span>
                   <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFiles} style={{ display: "none" }} />
                 </label>
                 {files.length > 0 && (
@@ -3578,9 +3800,9 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
 
               <label style={{ fontSize: 12, fontWeight: 700 }}>Notes <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span><textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions" rows="3" style={{ resize: "vertical" }} /></label>
 
-              <div style={{ padding: 14, borderRadius: 13, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div className="qrPortalPrice" style={{ padding: 14, borderRadius: 13, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div><div style={{ color: "#15803d", fontSize: 9, fontWeight: 850, textTransform: "uppercase", letterSpacing: ".8px" }}>Estimated price</div><div style={{ marginTop: 4, color: "#4d7c5a", fontSize: 9 }}>Based on {files.length} file{files.length === 1 ? "" : "s"} × {copies} {copies === 1 ? "copy" : "copies"}{duplex ? " · duplex discount applied" : ""}</div></div>
-                <strong style={{ color: "#166534", fontSize: 21 }}>₹{customerPrintEstimate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
+                <strong className="qrPortalPriceAmount" style={{ color: "#166534", fontSize: 21 }}>₹{customerPrintEstimate.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
               </div>
 
               {error && <div style={{ padding: 10, borderRadius: 10, background: "#fff1f2", color: "#be123c", fontSize: 11 }}>{error}</div>}
@@ -3592,7 +3814,8 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
 
         {workspaceInfo?.phone && <div style={{ textAlign: "center", marginTop: 14, color: "#94a3b8", fontSize: 10 }}>Café contact: {workspaceInfo.phone}</div>}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
