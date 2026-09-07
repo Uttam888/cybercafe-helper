@@ -3432,7 +3432,7 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
                   return (
                     <React.Fragment key={stage.key}>
                       <div className={`qrTrackingStage ${done ? "done" : ""} ${current ? "current" : ""}`}>
-                        <div className="qrTrackingDot">{done ? <Check size={13} strokeWidth={3} /> : stage.icon}</div>
+                        <div className="qrTrackingDot">{done ? <CheckCircle2 size={13} strokeWidth={3} /> : stage.icon}</div>
                         <span>{stage.label}</span>
                       </div>
                       {index < stages.length - 1 && <div className={`qrTrackingLine ${!rejected && currentIndex > index ? "done" : ""}`} />}
