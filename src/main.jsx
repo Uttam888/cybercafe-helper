@@ -3495,6 +3495,16 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
         .qrFormIntro strong, .qrFormSectionHeader strong { display: block; color: #1e293b; font-size: 12px; }
         .qrFormIntro span, .qrFormSectionHeader span { display: block; margin-top: 2px; color: #94a3b8; font-size: 9px; line-height: 1.45; }
 
+        .qrUploadBox { transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+        .qrUploadBox:hover { border-color:#60a5fa !important; background:#f0f7ff !important; }
+        .qrUploadBox:active { transform:scale(.995); }
+        .qrUploadIcon { width:48px; height:48px; margin:0 auto; border-radius:14px; display:grid; place-items:center; background:#eaf2ff; color:#2563eb; }
+        .qrUploadCta { display:inline-flex; align-items:center; justify-content:center; margin-top:10px; padding:9px 14px; border-radius:10px; background:#2563eb; color:#fff; font-size:10px; font-weight:800; }
+        .qrUploadMeta { display:flex; justify-content:center; flex-wrap:wrap; gap:6px; margin-top:9px; color:#94a3b8; font-size:8px; }
+        .qrSelectedHeader { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:12px 0 7px; }
+        .qrSelectedHeader strong { color:#334155; font-size:10px; }
+        .qrSelectedHeader button { border:0; background:transparent; color:#64748b; font-size:9px; font-weight:700; cursor:pointer; padding:4px 0; }
+        .qrFileTotal { display:flex; justify-content:space-between; gap:8px; margin-top:7px; color:#94a3b8; font-size:8px; }
         @media (max-width: 600px) {
           .qrCustomerPortal {
             min-height: 100dvh !important;
@@ -3702,16 +3712,24 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
 
               <div>
                 <div className="qrFormSectionHeader"><div className="qrFormStep">2</div><div><strong>Upload documents</strong><span>Choose the files you want this café to print.</span></div></div>
-                <label className="qrUploadBox" style={{ display: "block", padding: 18, border: "1.5px dashed #93c5fd", borderRadius: 14, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
-                  <Upload size={22} style={{ color: "#2563eb" }} />
-                  <strong style={{ display: "block", marginTop: 7, fontSize: 12 }}>{files.length
-  ? `${files.length} file${files.length > 1 ? "s" : ""} selected`
-  : "Tap to choose documents"}</strong>
-                  <span className="qrUploadHint" style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 10 }}>PDF, JPG, PNG, DOC or DOCX · up to 10 files · 10 MB each</span>
+                <label className="qrUploadBox" style={{ display: "block", padding: 20, border: "1.5px dashed #93c5fd", borderRadius: 15, background: "#f8fbff", textAlign: "center", cursor: "pointer" }}>
+                  <div className="qrUploadIcon"><Upload size={21} /></div>
+                  <strong style={{ display: "block", marginTop: 10, fontSize: 13, color: "#1e293b" }}>
+                    {files.length ? `${files.length} document${files.length > 1 ? "s" : ""} ready` : "Choose your documents"}
+                  </strong>
+                  <span className="qrUploadHint" style={{ display: "block", marginTop: 5, color: "#64748b", fontSize: 10 }}>
+                    {files.length ? "Tap here to add more files" : "Select one or multiple files from your phone"}
+                  </span>
+                  <span className="qrUploadCta">{files.length ? "＋ Add more files" : "Choose files"}</span>
+                  <div className="qrUploadMeta"><span>PDF</span><span>•</span><span>JPG</span><span>•</span><span>PNG</span><span>•</span><span>DOC/DOCX</span><span>•</span><span>10 MB each</span></div>
                   <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFiles} style={{ display: "none" }} />
                 </label>
                 {files.length > 0 && (
   <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 7 }}>
+    <div className="qrSelectedHeader">
+      <strong>{files.length} selected {files.length === 1 ? "file" : "files"}</strong>
+      <button type="button" onClick={() => setFiles([])}>Remove all</button>
+    </div>
     {files.map((file, index) => (
       <div
         key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
@@ -3788,23 +3806,9 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
       </div>
     ))}
 
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: 2,
-        fontSize: 9,
-        color: "#94a3b8"
-      }}
-    >
-      <span>
-        {files.length} of 10 files selected
-      </span>
-
-      <span>
-        {files.length < 10 ? "You can add more" : "Maximum reached"}
-      </span>
+    <div className="qrFileTotal">
+      <span>{files.length} of 10 files selected</span>
+      <span>{(files.reduce((total, file) => total + (file.size || 0), 0) / (1024 * 1024)).toFixed(1)} MB total</span>
     </div>
   </div>
 )}
