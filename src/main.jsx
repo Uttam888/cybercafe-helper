@@ -77,37 +77,63 @@ const getSafeUiError = (error, fallback = "Something went wrong. Please try agai
 /**
  * Call a Supabase Edge Function with a current access token.
  *
- * The important part here is the single 401 recovery path:
- * - obtain the current session
- * - call the function
- * - if the request is unauthorized, refresh the session
- * - retry exactly once with the new token
- *
- * This prevents a stale-but-present access token from breaking
- * authenticated Edge Functions after the app has been open for a while.
+ * Authentication recovery is intentionally limited:
+ * - use the current session first
+ * - if the function rejects the access token with 401, refresh once
+ * - if Supabase reports an invalid/missing refresh token, clear the
+ *   broken local session and require a fresh sign-in
+ * - retry the Edge Function exactly once after a successful refresh
  */
 async function invokeAuthenticatedFunction(functionName, options = {}) {
-  const getSessionResult = await supabase.auth.getSession();
+  const isInvalidRefreshTokenError = (error) => {
+    const message = String(error?.message || error || "").toLowerCase();
+    return (
+      message.includes("invalid refresh token") ||
+      message.includes("refresh token not found") ||
+      message.includes("refresh token is not found")
+    );
+  };
 
-  if (getSessionResult.error) {
-    throw getSessionResult.error;
-  }
+  const clearBrokenLocalSession = async () => {
+    try {
+      // scope: "local" clears the invalid browser session without depending
+      // on the server accepting the already-invalid refresh token.
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (signOutError) {
+      console.warn("Could not clear the broken local auth session:", signOutError);
+    }
+  };
 
-  let session = getSessionResult.data?.session || null;
+  const getUsableSession = async () => {
+    const { data, error } = await supabase.auth.getSession();
 
-  if (!session?.access_token) {
-    const refreshResult = await supabase.auth.refreshSession();
-
-    if (refreshResult.error) {
-      throw refreshResult.error;
+    if (error) {
+      throw error;
     }
 
-    session = refreshResult.data?.session || null;
-  }
+    let session = data?.session || null;
 
-  if (!session?.access_token) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
+    if (!session?.access_token) {
+      const refreshResult = await supabase.auth.refreshSession();
+
+      if (refreshResult.error) {
+        if (isInvalidRefreshTokenError(refreshResult.error)) {
+          await clearBrokenLocalSession();
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        throw refreshResult.error;
+      }
+
+      session = refreshResult.data?.session || null;
+    }
+
+    if (!session?.access_token) {
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+
+    return session;
+  };
 
   const invoke = (accessToken) =>
     supabase.functions.invoke(functionName, {
@@ -118,20 +144,51 @@ async function invokeAuthenticatedFunction(functionName, options = {}) {
       },
     });
 
+  let session;
+
+  try {
+    session = await getUsableSession();
+  } catch (error) {
+    if (isInvalidRefreshTokenError(error)) {
+      await clearBrokenLocalSession();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+    throw error;
+  }
+
   let result = await invoke(session.access_token);
 
-  // A session can contain a token that has become invalid between
-  // getSession() and the Edge Function request. Recover once.
-  if (result.error?.context?.status === 401 || result.error?.status === 401) {
-    const refreshResult = await supabase.auth.refreshSession();
+  const responseStatus =
+    result?.error?.context?.status ??
+    result?.error?.status ??
+    result?.error?.context?.response?.status;
 
-    if (refreshResult.error) {
-      throw refreshResult.error;
+  if (responseStatus === 401) {
+    let refreshedSession;
+
+    try {
+      const refreshResult = await supabase.auth.refreshSession();
+
+      if (refreshResult.error) {
+        if (isInvalidRefreshTokenError(refreshResult.error)) {
+          await clearBrokenLocalSession();
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        throw refreshResult.error;
+      }
+
+      refreshedSession = refreshResult.data?.session || null;
+    } catch (refreshError) {
+      if (isInvalidRefreshTokenError(refreshError)) {
+        await clearBrokenLocalSession();
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+      throw refreshError;
     }
 
-    const refreshedSession = refreshResult.data?.session || null;
-
     if (!refreshedSession?.access_token) {
+      await clearBrokenLocalSession();
       throw new Error("Your session has expired. Please sign in again.");
     }
 
@@ -11736,7 +11793,31 @@ function AppRoot() {
           if (!refreshResult.error) {
             session = refreshResult.data?.session || null;
           } else {
-            console.warn("Supabase session refresh during startup failed:", refreshResult.error);
+            const message = String(
+              refreshResult.error?.message || refreshResult.error || ""
+            ).toLowerCase();
+
+            const invalidRefreshToken =
+              message.includes("invalid refresh token") ||
+              message.includes("refresh token not found") ||
+              message.includes("refresh token is not found");
+
+            if (invalidRefreshToken) {
+              try {
+                await supabase.auth.signOut({ scope: "local" });
+              } catch (signOutError) {
+                console.warn(
+                  "Could not clear the broken local auth session during startup:",
+                  signOutError
+                );
+              }
+              session = null;
+            } else {
+              console.warn(
+                "Supabase session refresh during startup failed:",
+                refreshResult.error
+              );
+            }
           }
         }
 
