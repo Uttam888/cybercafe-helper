@@ -2002,6 +2002,11 @@ function LandingPage({ onSignIn, onSignUp }) {
 
 const LEGAL_VERSION = "1.0";
 
+const getAuthRedirectUrl = () =>
+  import.meta.env.PROD
+    ? "https://www.cybercafehelper.in/"
+    : window.location.origin;
+
 function LegalPage({ type, onBack, onSignUp }) {
   const isPrivacy = type === "privacy";
   const title = isPrivacy ? "Privacy Policy" : "Terms & Conditions";
@@ -2210,6 +2215,7 @@ function AuthScreen({ initialMode = "login", onBackToLanding, onForgotPassword }
             email: cleanEmail,
             password,
             options: {
+              emailRedirectTo: getAuthRedirectUrl(),
               data: {
                 business_name: cleanBusinessName,
                 terms_accepted_at: new Date().toISOString(),
@@ -2897,7 +2903,7 @@ function ForgotPasswordScreen({ onBackToLogin, onBackToLanding }) {
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: window.location.origin
+        redirectTo: getAuthRedirectUrl()
       });
       if (resetError) throw resetError;
       setMessage("If an account exists for this email, a password reset link has been sent. Please check your inbox.");
@@ -3079,7 +3085,7 @@ async function loadRazorpayCheckoutScript() {
 
 function CafeQRPage({ workspace, businessProfile }) {
   const workspaceId = workspace?.id || "";
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://cybercafe-helper.vercel.app";
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://www.cybercafehelper.in";
   const qrUrl = workspaceId
     ? `${baseUrl}/?workspace=${encodeURIComponent(workspaceId)}&mode=customer`
     : "";
