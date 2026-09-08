@@ -3811,15 +3811,26 @@ body {
   overflow-x: hidden;
 }
 
-.appShell,
-.app,
-.mainArea,
-.content {
+.appShell {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
+
+.mainArea {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.content {
+  max-width: 1600px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 
 @media (max-width: 640px) {
   .mainArea {
