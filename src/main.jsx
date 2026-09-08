@@ -2002,11 +2002,6 @@ function LandingPage({ onSignIn, onSignUp }) {
 
 const LEGAL_VERSION = "1.0";
 
-const getAuthRedirectUrl = () =>
-  import.meta.env.PROD
-    ? "https://www.cybercafehelper.in/"
-    : window.location.origin;
-
 function LegalPage({ type, onBack, onSignUp }) {
   const isPrivacy = type === "privacy";
   const title = isPrivacy ? "Privacy Policy" : "Terms & Conditions";
@@ -2215,7 +2210,6 @@ function AuthScreen({ initialMode = "login", onBackToLanding, onForgotPassword }
             email: cleanEmail,
             password,
             options: {
-              emailRedirectTo: getAuthRedirectUrl(),
               data: {
                 business_name: cleanBusinessName,
                 terms_accepted_at: new Date().toISOString(),
@@ -2903,7 +2897,7 @@ function ForgotPasswordScreen({ onBackToLogin, onBackToLanding }) {
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: getAuthRedirectUrl()
+        redirectTo: window.location.origin
       });
       if (resetError) throw resetError;
       setMessage("If an account exists for this email, a password reset link has been sent. Please check your inbox.");
@@ -3085,7 +3079,7 @@ async function loadRazorpayCheckoutScript() {
 
 function CafeQRPage({ workspace, businessProfile }) {
   const workspaceId = workspace?.id || "";
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://www.cybercafehelper.in";
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://cybercafe-helper.vercel.app";
   const qrUrl = workspaceId
     ? `${baseUrl}/?workspace=${encodeURIComponent(workspaceId)}&mode=customer`
     : "";
@@ -11476,248 +11470,262 @@ function Calculators() {
 }
 
 function printReceipt(task, businessProfile = {}) {
-  const due =
-    Math.max(
-      Number(task.amount || 0) -
-        Number(task.paid || 0),
-      0
-    );
+  const due = Math.max(
+    Number(task.amount || 0) - Number(task.paid || 0),
+    0
+  );
 
-  const receiptWindow =
-    window.open(
-      "",
-      "_blank",
-      "noopener,noreferrer,width=800,height=900"
-    );
+  // Print in the current tab instead of opening a popup.
+  // This avoids browser popup blockers entirely.
+  const printRootId = "cybercafe-receipt-print-root";
+  let printRoot = document.getElementById(printRootId);
 
-  if (!receiptWindow) {
-    alert(
-      "Please allow popups to print the receipt."
-    );
-    return;
+  if (printRoot) {
+    printRoot.remove();
   }
 
-  receiptWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Receipt - ${escapeHtml(task.reference || task.name)}</title>
+  printRoot = document.createElement("div");
+  printRoot.id = printRootId;
 
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            background: #fff;
-            color: #111827;
-            padding: 40px;
-            line-height: 1.5;
-          }
-
-          .receipt {
-            max-width: 650px;
-            margin: auto;
-            border: 1px solid #ddd;
-            padding: 32px;
-            border-radius: 6px;
-          }
-
-          .header {
-            display: flex;
-            justify-content: space-between;
-            gap: 32px;
-            border-bottom: 2px solid #111827;
-            padding-bottom: 22px;
-            margin-bottom: 24px;
-          }
-
-          h1 {
-            margin: 0 0 7px;
-            font-size: 25px;
-            line-height: 1.2;
-            letter-spacing: -0.2px;
-          }
-
-          .muted {
-            color: #6b7280;
-            font-size: 13px;
-            line-height: 1.55;
-          }
-
-          .header .muted {
-            margin-top: 2px;
-          }
-
-          .header > div:last-child {
-            text-align: right;
-            white-space: nowrap;
-          }
-
-          .header > div:last-child strong {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 14px;
-            letter-spacing: 0.6px;
-          }
-
-          .row {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 28px;
-            padding: 12px 0;
-            border-bottom: 1px solid #eee;
-            line-height: 1.45;
-          }
-
-          .row span {
-            color: #6b7280;
-            font-size: 13px;
-          }
-
-          .row strong {
-            font-size: 14px;
-            text-align: right;
-            line-height: 1.45;
-          }
-
-          .total {
-            margin-top: 4px;
-            padding: 15px 0;
-            font-size: 18px;
-            font-weight: bold;
-          }
-
-          .total span {
-            color: #111827;
-            font-size: 15px;
-          }
-
-          .total strong {
-            font-size: 18px;
-          }
-
-          .footer {
-            margin-top: 30px;
-            padding-top: 18px;
-            border-top: 1px solid #eee;
-            font-size: 12px;
-            color: #6b7280;
-            text-align: center;
-            line-height: 1.7;
-          }
-
-          .footer div {
-            margin: 2px 0;
-          }
-
-          .footer div:last-child {
-            margin-top: 9px;
-            font-weight: 500;
-          }
-
-          @media print {
-            body {
-              padding: 0;
-            }
-
-            .receipt {
-              border: none;
-              padding: 24px;
-            }
-          }
-        </style>
-      </head>
-
-      <body>
-        <div class="receipt">
-          <div class="header">
-            <div>
-              <h1>
-                ${escapeHtml(businessProfile.businessName || "CyberCafe Helper")}
-              </h1>
-
-              <div class="muted">
-                ${escapeHtml(businessProfile.ownerName ? `Owner: ${businessProfile.ownerName}` : "Digital Seva / Customer Receipt")}
-              </div>
-            </div>
-
-            <div>
-              <strong>
-                RECEIPT
-              </strong>
-
-              <div class="muted">
-                #${escapeHtml(task.reference || task.id)}
-              </div>
+  printRoot.innerHTML = `
+    <div class="receipt-print-page">
+      <div class="receipt-print-card">
+        <div class="receipt-print-header">
+          <div>
+            <h1>${escapeHtml(businessProfile.businessName || "CyberCafe Helper")}</h1>
+            <div class="receipt-print-muted">
+              ${escapeHtml(
+                businessProfile.ownerName
+                  ? `Owner: ${businessProfile.ownerName}`
+                  : "Digital Seva / Customer Receipt"
+              )}
             </div>
           </div>
 
-          <div class="row">
-            <span>Customer</span>
-            <strong>
-              ${escapeHtml(task.name)}
-            </strong>
-          </div>
-
-          <div class="row">
-            <span>Phone</span>
-            <strong>
-              ${escapeHtml(task.phone || "—")}
-            </strong>
-          </div>
-
-          <div class="row">
-            <span>Service</span>
-            <strong>
-              ${escapeHtml(task.service)}
-            </strong>
-          </div>
-
-          <div class="row">
-            <span>Total Amount</span>
-            <strong>
-              ₹${escapeHtml(task.amount || 0)}
-            </strong>
-          </div>
-
-          <div class="row">
-            <span>Paid</span>
-            <strong>
-              ₹${escapeHtml(task.paid || 0)}
-            </strong>
-          </div>
-
-          <div class="row total">
-            <span>Amount Due</span>
-            <strong>
-              ₹${escapeHtml(due)}
-            </strong>
-          </div>
-
-          <div class="row">
-            <span>Status</span>
-            <strong>
-              ${escapeHtml(task.status)}
-            </strong>
-          </div>
-
-          <div class="footer">
-            ${businessProfile.address ? `<div>${escapeHtml(businessProfile.address)}</div>` : ""}
-            ${businessProfile.phone ? `<div>Phone: ${escapeHtml(businessProfile.phone)}</div>` : ""}
-            ${businessProfile.gstin ? `<div>GSTIN: ${escapeHtml(businessProfile.gstin)}</div>` : ""}
-            <div>${escapeHtml(businessProfile.receiptFooter || "Thank you for using our services.")}</div>
+          <div class="receipt-print-header-right">
+            <strong>RECEIPT</strong>
+            <div class="receipt-print-muted">
+              #${escapeHtml(task.reference || task.id)}
+            </div>
           </div>
         </div>
 
-        <script>
-          window.onload = function () {
-            window.print();
-          };
-        </script>
-      </body>
-    </html>
-  `);
+        <div class="receipt-print-row">
+          <span>Customer</span>
+          <strong>${escapeHtml(task.name)}</strong>
+        </div>
 
-  receiptWindow.document.close();
+        <div class="receipt-print-row">
+          <span>Phone</span>
+          <strong>${escapeHtml(task.phone || "—")}</strong>
+        </div>
+
+        <div class="receipt-print-row">
+          <span>Service</span>
+          <strong>${escapeHtml(task.service)}</strong>
+        </div>
+
+        <div class="receipt-print-row">
+          <span>Total Amount</span>
+          <strong>₹${escapeHtml(task.amount || 0)}</strong>
+        </div>
+
+        <div class="receipt-print-row">
+          <span>Paid</span>
+          <strong>₹${escapeHtml(task.paid || 0)}</strong>
+        </div>
+
+        <div class="receipt-print-row receipt-print-total">
+          <span>Amount Due</span>
+          <strong>₹${escapeHtml(due)}</strong>
+        </div>
+
+        <div class="receipt-print-row">
+          <span>Status</span>
+          <strong>${escapeHtml(task.status)}</strong>
+        </div>
+
+        <div class="receipt-print-footer">
+          ${
+            businessProfile.address
+              ? `<div>${escapeHtml(businessProfile.address)}</div>`
+              : ""
+          }
+          ${
+            businessProfile.phone
+              ? `<div>Phone: ${escapeHtml(businessProfile.phone)}</div>`
+              : ""
+          }
+          ${
+            businessProfile.gstin
+              ? `<div>GSTIN: ${escapeHtml(businessProfile.gstin)}</div>`
+              : ""
+          }
+          <div>
+            ${escapeHtml(
+              businessProfile.receiptFooter ||
+                "Thank you for using our services."
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const style = document.createElement("style");
+  style.id = "cybercafe-receipt-print-style";
+  style.textContent = `
+    #${printRootId} {
+      display: none;
+    }
+
+    @media print {
+      body > *:not(#${printRootId}) {
+        display: none !important;
+      }
+
+      #${printRootId} {
+        display: block !important;
+      }
+
+      @page {
+        margin: 12mm;
+      }
+
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        color: #111827 !important;
+        font-family: Arial, sans-serif !important;
+      }
+
+      .receipt-print-page {
+        width: 100%;
+        min-height: 100%;
+        background: #fff;
+        color: #111827;
+        padding: 10px;
+        box-sizing: border-box;
+      }
+
+      .receipt-print-card {
+        max-width: 650px;
+        margin: 0 auto;
+        border: 1px solid #ddd;
+        padding: 32px;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+
+      .receipt-print-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 32px;
+        border-bottom: 2px solid #111827;
+        padding-bottom: 22px;
+        margin-bottom: 24px;
+      }
+
+      .receipt-print-header h1 {
+        margin: 0 0 7px;
+        font-size: 25px;
+        line-height: 1.2;
+        letter-spacing: -0.2px;
+      }
+
+      .receipt-print-muted {
+        color: #6b7280;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .receipt-print-header-right {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .receipt-print-header-right strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+        letter-spacing: 0.6px;
+      }
+
+      .receipt-print-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 28px;
+        padding: 12px 0;
+        border-bottom: 1px solid #eee;
+        line-height: 1.45;
+      }
+
+      .receipt-print-row span {
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .receipt-print-row strong {
+        font-size: 14px;
+        text-align: right;
+        line-height: 1.45;
+      }
+
+      .receipt-print-total {
+        margin-top: 4px;
+        padding: 15px 0;
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      .receipt-print-total span {
+        color: #111827;
+        font-size: 15px;
+      }
+
+      .receipt-print-total strong {
+        font-size: 18px;
+      }
+
+      .receipt-print-footer {
+        margin-top: 30px;
+        padding-top: 18px;
+        border-top: 1px solid #eee;
+        font-size: 12px;
+        color: #6b7280;
+        text-align: center;
+        line-height: 1.7;
+      }
+
+      .receipt-print-footer div {
+        margin: 2px 0;
+      }
+
+      .receipt-print-footer div:last-child {
+        margin-top: 9px;
+        font-weight: 500;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+  document.body.appendChild(printRoot);
+
+  // Give the browser a frame to apply the print DOM/styles before opening
+  // the native print dialog.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.print();
+
+      // Keep the DOM clean after the print dialog closes.
+      window.setTimeout(() => {
+        printRoot.remove();
+        style.remove();
+      }, 1000);
+    });
+  });
 }
 
 function AppRoot() {
