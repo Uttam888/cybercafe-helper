@@ -56,10 +56,22 @@ import {
   LogOut,
   Mail,
   LockKeyhole,
+  Eye,
+  EyeOff,
   QrCode,
   Printer as PrinterIcon,
   Bell
 } from "lucide-react";
+
+const getSafeUiError = (error, fallback = "Something went wrong. Please try again.") => {
+  const message = String(error?.message || "").trim();
+  if (!message) return fallback;
+  if (message.length > 180) return fallback;
+  if (/supabase|postgres|postgrest|row[- ]level|rls|policy|relation|schema|jwt|function|stack|sql|database|permission denied|violates/i.test(message)) {
+    return fallback;
+  }
+  return message;
+};
 
 const DEFAULT_PRINT_PRICING = {
   bwPrice: 2,
@@ -88,6 +100,36 @@ const calculatePrintEstimate = ({ workspace, colorMode, paperSize, copies, duple
   const discountMultiplier = duplex ? Math.max(0, 1 - Math.min(100, Math.max(0, pricing.duplexDiscount)) / 100) : 1;
   return Math.max(0, base * units * discountMultiplier);
 };
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getSafeExternalUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function getSafePhoneUrl(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 15);
+  return digits ? `tel:${digits}` : "";
+}
+
+function getSafeWhatsAppUrl(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(-15);
+  return digits ? `https://wa.me/${digits}` : "";
+}
 
 const services = [
   {
@@ -308,20 +350,10 @@ const defaultServiceTemplates = [
   }
 ];
 
-function getStoredServiceTemplates() {
-  try {
-    const saved = localStorage.getItem("cc_service_templates");
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 function getServiceTemplate(service) {
   const value = String(service || "").trim();
-  const templates = [...defaultServiceTemplates, ...getStoredServiceTemplates()];
+  const templates = defaultServiceTemplates;
   return templates.find((item) => String(item.name || "").trim() === value) || null;
 }
 
@@ -554,7 +586,7 @@ function normalizeQuickLinkForDatabase(link, workspaceId) {
   return {
     workspace_id: workspaceId,
     name: String(link?.name || "").trim(),
-    url: String(link?.url || "").trim()
+    url: getSafeExternalUrl(link?.url)
   };
 }
 
@@ -575,7 +607,7 @@ async function createQuickLinkInSupabase(link, workspaceId) {
   if (!workspaceId) throw new Error("Workspace is required to create a quick link.");
 
   const payload = normalizeQuickLinkForDatabase(link, workspaceId);
-  if (!payload.name || !payload.url) throw new Error("Quick link name and URL are required.");
+  if (!payload.name || !payload.url) throw new Error("Quick link name and a valid http(s) URL are required.");
 
   const { data, error } = await supabase
     .from("quick_links")
@@ -1241,7 +1273,7 @@ function CustomerAccessModal({ customer, workspace, onClose, onLinked }) {
       onLinked(result);
     } catch (err) {
       console.error("Failed to link customer account:", err);
-      setError(err?.message || "Could not link the customer account.");
+      setError(getSafeUiError(err, "Could not link the customer account."));
     } finally {
       setSaving(false);
     }
@@ -1317,7 +1349,7 @@ function CustomerPortal({ user, workspace, onSignOut }) {
         if (!cancelled) setCustomer(data);
       } catch (err) {
         console.error("Customer portal load failed:", err);
-        if (!cancelled) setError(err?.message || "Could not load your customer workspace.");
+        if (!cancelled) setError(getSafeUiError(err, "Could not load your customer workspace."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1464,53 +1496,68 @@ function CustomerPortal({ user, workspace, onSignOut }) {
 
 function LandingPage({ onSignIn, onSignUp }) {
   const features = [
-    [Users, "Customer CRM", "Store customer details, service work, references, notes and complete history in one organized record."],
-    [FileText, "Document Control", "Track required documents with clear received and pending states before submitting an application."],
-    [Wallet, "Payment Management", "Record advances, balances, payment methods and every collection without manual calculations."],
-    [ClipboardList, "Application Workflow", "Move work through New, Documents, Form Filled, Submitted, Processing, Ready and Completed."],
-    [CalendarDays, "Smart Follow-ups", "Schedule calls, document reminders, payment follow-ups and pickup reminders so work keeps moving."],
-    [BarChart3, "Business Reports", "See collections, outstanding amounts, service performance, overdue work and completion activity."],
-    [Bookmark, "Quick Access", "Keep frequently used government and service portals close to the work you are doing."],
-    [Sparkles, "AI Assistance", "Get concise customer summaries and recommended next actions from the information already in your workspace."],
-    [Receipt, "Professional Receipts", "Generate clean customer receipts using your business name, contact details and receipt footer."]
+    [Users, "Customer CRM", "Keep every customer, service, reference and note organized in one place."],
+    [ClipboardList, "Application Workflow", "Move work from new request to completed without losing track of the next step."],
+    [FileText, "Document Control", "Know which documents are received, missing or ready before submitting an application."],
+    [Wallet, "Payments & Earnings", "Record paid and outstanding amounts and understand what your café is actually collecting."],
+    [CalendarDays, "Follow-ups", "Schedule calls, reminders, document requests and pickup follow-ups so nothing gets forgotten."],
+    [BarChart3, "Business Reports", "See collections, outstanding work and service activity without maintaining separate spreadsheets."],
+    [QrCode, "QR Print Requests", "Let customers scan your café QR, upload documents and send a print request directly to your queue."],
+    [Sparkles, "AI Assistance", "Get concise customer summaries and useful next actions from information already in your workspace."]
   ];
+
+  const scrollTo = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="landingShell">
       <style>{`
         .landingShell { min-height:100vh; background:#f8fafc; color:#0f172a; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; overflow-x:hidden; }
-        .landingNav { height:72px; display:flex; align-items:center; justify-content:space-between; max-width:1220px; margin:0 auto; padding:0 24px; box-sizing:border-box; }
-        .landingBrand { display:flex; align-items:center; gap:10px; }
+        .landingShell * { box-sizing:border-box; }
+        .landingNav { position:sticky; top:0; z-index:50; height:72px; display:flex; align-items:center; justify-content:space-between; max-width:1240px; margin:0 auto; padding:0 24px; background:rgba(248,250,252,.88); backdrop-filter:blur(16px); border-bottom:1px solid rgba(226,232,240,.72); }
+        .landingBrand { display:flex; align-items:center; gap:10px; cursor:pointer; }
         .landingBrandIcon { width:39px; height:39px; border-radius:11px; display:flex; align-items:center; justify-content:center; background:#2563eb; color:#fff; box-shadow:0 8px 20px rgba(37,99,235,.2); }
         .landingBrandName { font-size:15px; font-weight:850; letter-spacing:-.3px; color:#0f172a; }
         .landingBrandSub { color:#2563eb; font-size:8px; font-weight:850; letter-spacing:2.5px; margin-top:1px; }
-        .landingNavActions { display:flex; align-items:center; gap:9px; }
+        .landingNavLinks { display:flex; align-items:center; gap:3px; margin-left:auto; margin-right:18px; }
+        .landingNavLink { border:0; background:transparent; color:#64748b; padding:8px 11px; border-radius:9px; cursor:pointer; font:inherit; font-size:10px; font-weight:750; }
+        .landingNavLink:hover { background:#eef2ff; color:#1d4ed8; }
+        .landingNavActions { display:flex; align-items:center; gap:8px; }
         .landingNavButton { border:0; background:transparent; color:#475569; padding:9px 13px; border-radius:9px; cursor:pointer; font:inherit; font-size:11px; font-weight:750; }
         .landingNavButton:hover { background:#eef2ff; color:#1d4ed8; }
         .landingNavPrimary { background:#2563eb; color:#fff; box-shadow:0 7px 16px rgba(37,99,235,.18); }
         .landingNavPrimary:hover { background:#1d4ed8; color:#fff; }
-        .landingHero { position:relative; max-width:1220px; margin:0 auto; padding:72px 24px 76px; display:grid; grid-template-columns:1fr 1fr; gap:62px; align-items:center; box-sizing:border-box; }
-        .landingGlow { position:absolute; width:560px; height:560px; border-radius:50%; filter:blur(90px); background:#dbeafe; opacity:.7; top:-190px; left:-210px; pointer-events:none; }
+
+        .landingHero { position:relative; max-width:1240px; margin:0 auto; padding:82px 24px 92px; display:grid; grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr); gap:64px; align-items:center; }
+        .landingGlowOne,.landingGlowTwo { position:absolute; border-radius:50%; filter:blur(80px); pointer-events:none; }
+        .landingGlowOne { width:500px; height:500px; background:#dbeafe; opacity:.72; top:-170px; left:-220px; }
+        .landingGlowTwo { width:360px; height:360px; background:#e0e7ff; opacity:.5; right:-150px; bottom:-100px; }
         .landingHeroCopy { position:relative; z-index:1; }
-        .landingEyebrow { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:9px; font-weight:850; letter-spacing:1.2px; text-transform:uppercase; }
-        .landingHero h1 { max-width:700px; margin:18px 0 16px; font-size:58px; line-height:1.02; letter-spacing:-3px; color:#0f172a; }
+        .landingEyebrow { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid #bfdbfe; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:9px; font-weight:850; letter-spacing:1.15px; text-transform:uppercase; }
+        .landingEyebrow svg { width:13px; height:13px; }
+        .landingHero h1 { max-width:720px; margin:18px 0 18px; font-size:60px; line-height:1.01; letter-spacing:-3.6px; color:#0f172a; }
         .landingHero h1 span { color:#2563eb; }
-        .landingHeroText { max-width:620px; margin:0; color:#64748b; font-size:15px; line-height:1.78; }
-        .landingHeroActions { display:flex; align-items:center; gap:11px; margin-top:28px; flex-wrap:wrap; }
-        .landingCta { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid #2563eb; border-radius:11px; padding:13px 17px; background:#2563eb; color:#fff; cursor:pointer; font:inherit; font-size:11px; font-weight:850; box-shadow:0 10px 24px rgba(37,99,235,.2); transition:.18s ease; }
-        .landingCta:hover { background:#1d4ed8; transform:translateY(-1px); }
+        .landingHeroText { max-width:625px; margin:0; color:#64748b; font-size:15px; line-height:1.78; }
+        .landingHeroActions { display:flex; align-items:center; gap:11px; margin-top:29px; flex-wrap:wrap; }
+        .landingCta { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid #2563eb; border-radius:11px; padding:13px 17px; background:#2563eb; color:#fff; cursor:pointer; font:inherit; font-size:11px; font-weight:850; box-shadow:0 10px 24px rgba(37,99,235,.2); transition:transform .18s ease,background .18s ease,box-shadow .18s ease; }
+        .landingCta:hover { background:#1d4ed8; transform:translateY(-2px); box-shadow:0 14px 28px rgba(37,99,235,.24); }
         .landingSecondary { background:#fff; border-color:#cbd5e1; color:#334155; box-shadow:none; }
-        .landingSecondary:hover { background:#f8fafc; color:#1d4ed8; }
-        .landingTrust { display:flex; align-items:center; gap:8px; margin-top:20px; color:#94a3b8; font-size:10px; }
+        .landingSecondary:hover { background:#fff; color:#1d4ed8; box-shadow:0 8px 20px rgba(15,23,42,.07); }
+        .landingTrust { display:flex; align-items:center; gap:8px; margin-top:20px; color:#64748b; font-size:10px; }
         .landingTrust svg { color:#16a34a; }
-        .landingHeroMini { display:flex; gap:18px; margin-top:30px; flex-wrap:wrap; }
+        .landingHeroMini { display:flex; gap:19px; margin-top:28px; flex-wrap:wrap; }
         .landingHeroMiniItem { display:flex; align-items:center; gap:7px; color:#475569; font-size:9px; font-weight:700; }
         .landingHeroMiniItem svg { color:#2563eb; }
 
         .landingPreview { position:relative; z-index:1; }
-        .landingDashboardCard { border:1px solid #dbe3ef; border-radius:22px; background:#fff; box-shadow:0 30px 80px rgba(15,23,42,.14); overflow:hidden; transform:rotate(1deg); }
+        .landingPreviewBadge { position:absolute; top:-22px; right:-10px; z-index:3; display:flex; align-items:center; gap:7px; padding:8px 10px; border:1px solid #bfdbfe; border-radius:10px; background:#fff; color:#1d4ed8; box-shadow:0 12px 28px rgba(15,23,42,.1); font-size:8px; font-weight:850; }
+        .landingPreviewBadge svg { width:13px; height:13px; }
+        .landingDashboardCard { border:1px solid #dbe3ef; border-radius:22px; background:#fff; box-shadow:0 30px 80px rgba(15,23,42,.14); overflow:hidden; transform:rotate(1deg); transition:transform .25s ease,box-shadow .25s ease; }
+        .landingDashboardCard:hover { transform:rotate(0deg) translateY(-4px); box-shadow:0 36px 90px rgba(15,23,42,.17); }
         .landingPreviewTop { height:44px; display:flex; align-items:center; gap:6px; padding:0 15px; border-bottom:1px solid #edf2f7; background:#f8fafc; }
         .landingDot { width:7px; height:7px; border-radius:50%; background:#cbd5e1; }
+        .landingPreviewTopTitle { margin-left:8px; color:#94a3b8; font-size:8px; font-weight:750; }
         .landingPreviewBody { padding:17px; }
         .landingPreviewTitle { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
         .landingPreviewTitle strong { font-size:13px; }
@@ -1518,271 +1565,276 @@ function LandingPage({ onSignIn, onSignUp }) {
         .landingStats { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-bottom:12px; }
         .landingStat { padding:12px; border:1px solid #e5e7eb; border-radius:11px; background:#fff; }
         .landingStat span { display:block; color:#94a3b8; font-size:8px; margin-bottom:6px; }
-        .landingStat strong { font-size:17px; }
+        .landingStat strong { font-size:17px; letter-spacing:-.4px; }
         .landingStat em { display:block; margin-top:4px; color:#16a34a; font-size:7px; font-style:normal; font-weight:750; }
         .landingPreviewTable { border:1px solid #e5e7eb; border-radius:11px; overflow:hidden; }
-        .landingTableRow { display:grid; grid-template-columns:1.4fr 1fr .7fr; gap:10px; align-items:center; padding:11px 12px; border-bottom:1px solid #edf2f7; font-size:8px; }
-        .landingTableRow:last-child { border-bottom:0; }
-        .landingTableHeader { color:#94a3b8; background:#f8fafc; font-size:7px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
-        .landingStatus { justify-self:start; padding:4px 7px; border-radius:999px; background:#ecfdf5; color:#15803d; font-size:7px; font-weight:800; }
-        .landingPreviewBottom { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
-        .landingPreviewModule { padding:12px; border:1px solid #e5e7eb; border-radius:11px; background:#f8fafc; }
-        .landingPreviewModuleHead { display:flex; align-items:center; gap:7px; margin-bottom:9px; font-size:8px; font-weight:800; }
-        .landingPreviewModuleHead svg { color:#2563eb; }
-        .landingProgress { height:6px; border-radius:99px; background:#e2e8f0; overflow:hidden; }
-        .landingProgress span { display:block; height:100%; width:72%; border-radius:inherit; background:#2563eb; }
-        .landingPaymentRow { display:flex; justify-content:space-between; align-items:center; font-size:8px; }
-        .landingPaymentRow strong { font-size:12px; }
-        .landingPaymentGood { color:#16a34a; font-weight:800; }
+        .landingPreviewRow { min-height:43px; display:grid; grid-template-columns:1.4fr .8fr .65fr; align-items:center; gap:8px; padding:0 11px; border-bottom:1px solid #f1f5f9; }
+        .landingPreviewRow:last-child { border-bottom:0; }
+        .landingPreviewRow > div { min-width:0; }
+        .landingPreviewCustomer { display:flex; align-items:center; gap:8px; }
+        .landingPreviewAvatar { width:25px; height:25px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#eff6ff; color:#2563eb; font-size:8px; font-weight:850; }
+        .landingPreviewCustomer strong { display:block; font-size:8px; }
+        .landingPreviewCustomer span { display:block; margin-top:2px; color:#94a3b8; font-size:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .landingPreviewStatus { display:inline-flex; width:max-content; padding:4px 7px; border-radius:999px; background:#ecfdf5; color:#15803d; font-size:7px; font-weight:800; }
+        .landingPreviewAmount { text-align:right; font-size:8px; font-weight:800; }
+        .landingPreviewFooter { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding:10px 11px; border:1px dashed #bfdbfe; border-radius:10px; background:#eff6ff; }
+        .landingPreviewFooter span { color:#475569; font-size:8px; }
+        .landingPreviewFooter strong { color:#1d4ed8; font-size:9px; }
 
-        .landingProblem { padding:78px 24px; background:#fff; border-top:1px solid #eef2f7; border-bottom:1px solid #eef2f7; }
-        .landingProblemGrid { max-width:1120px; margin:0 auto; display:grid; grid-template-columns:.85fr 1.15fr; gap:60px; align-items:center; }
-        .landingKicker { color:#2563eb; font-size:9px; font-weight:850; letter-spacing:1.7px; text-transform:uppercase; }
-        .landingProblem h2 { margin:9px 0 13px; color:#0f172a; font-size:35px; line-height:1.12; letter-spacing:-1.4px; }
-        .landingProblemLead { margin:0; color:#64748b; font-size:12px; line-height:1.75; }
-        .landingProblemList { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        .landingProblemItem { display:flex; gap:11px; padding:17px; border:1px solid #e5e7eb; border-radius:14px; background:#f8fafc; }
-        .landingProblemIcon { width:31px; height:31px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:9px; background:#fff; color:#2563eb; border:1px solid #dbeafe; }
-        .landingProblemItem strong { display:block; font-size:11px; margin-bottom:4px; }
-        .landingProblemItem p { margin:0; color:#64748b; font-size:9px; line-height:1.55; }
+        .landingSection { max-width:1240px; margin:0 auto; padding:88px 24px; scroll-margin-top:72px; }
+        .landingSectionSoft { background:#fff; border-top:1px solid #e8edf4; border-bottom:1px solid #e8edf4; }
+        .landingKicker { display:inline-flex; color:#2563eb; font-size:9px; font-weight:850; letter-spacing:1.4px; text-transform:uppercase; }
+        .landingSectionHead { max-width:700px; margin-bottom:34px; }
+        .landingSectionHead h2 { margin:9px 0 10px; font-size:34px; line-height:1.12; letter-spacing:-1.7px; color:#0f172a; }
+        .landingSectionHead p { margin:0; color:#64748b; font-size:13px; line-height:1.75; }
 
-        .landingProduct { padding:82px 24px; background:#f1f5f9; }
-        .landingProductInner { max-width:1120px; margin:0 auto; }
-        .landingProductHead { max-width:720px; margin:0 auto 38px; text-align:center; }
-        .landingProductHead h2 { margin:9px 0 10px; color:#0f172a; font-size:36px; letter-spacing:-1.4px; }
-        .landingProductHead p { margin:0; color:#64748b; font-size:12px; line-height:1.75; }
-        .landingProductShowcase { display:grid; grid-template-columns:1.05fr .95fr; gap:16px; }
-        .landingShowcaseCard { border:1px solid #dbe3ef; border-radius:18px; background:#fff; box-shadow:0 18px 45px rgba(15,23,42,.07); overflow:hidden; }
-        .landingShowcaseHeader { padding:15px 17px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #edf2f7; }
-        .landingShowcaseHeader strong { font-size:11px; }
-        .landingShowcaseHeader span { font-size:8px; color:#94a3b8; }
-        .landingShowcaseBody { padding:16px; }
-        .landingWorkflow { display:flex; align-items:center; gap:0; overflow:hidden; margin-bottom:18px; }
-        .landingWorkflowStep { flex:1; min-width:0; text-align:center; }
-        .landingWorkflowDot { width:25px; height:25px; margin:0 auto 7px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#2563eb; color:#fff; font-size:8px; font-weight:850; position:relative; z-index:1; }
-        .landingWorkflowLabel { color:#475569; font-size:7px; font-weight:750; line-height:1.35; }
-        .landingWorkflowLine { height:2px; flex:1; background:#bfdbfe; margin-top:-19px; }
-        .landingCustomerCard { border:1px solid #e5e7eb; border-radius:13px; padding:14px; }
-        .landingCustomerTop { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:13px; }
-        .landingCustomerIdentity { display:flex; align-items:center; gap:9px; }
-        .landingAvatar { width:32px; height:32px; border-radius:10px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:850; }
-        .landingCustomerIdentity strong { display:block; font-size:10px; }
-        .landingCustomerIdentity span { display:block; color:#94a3b8; font-size:7px; margin-top:2px; }
-        .landingBadge { padding:5px 8px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:7px; font-weight:850; }
-        .landingCustomerGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-        .landingCustomerMetric { padding:9px; border-radius:9px; background:#f8fafc; }
-        .landingCustomerMetric span { display:block; color:#94a3b8; font-size:7px; margin-bottom:4px; }
-        .landingCustomerMetric strong { font-size:10px; }
-        .landingSideStack { display:grid; grid-template-rows:1fr 1fr; gap:16px; }
-        .landingMiniRows { display:flex; flex-direction:column; gap:9px; }
-        .landingMiniRow { display:flex; align-items:center; gap:9px; padding:9px; border-radius:10px; background:#f8fafc; }
-        .landingMiniIcon { width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#fff; border:1px solid #e5e7eb; color:#2563eb; }
-        .landingMiniRow div { flex:1; min-width:0; }
-        .landingMiniRow strong { display:block; font-size:8px; }
-        .landingMiniRow span { display:block; color:#94a3b8; font-size:7px; margin-top:2px; }
-        .landingMiniAmount { font-size:8px; font-weight:850; }
-        .landingAiBox { display:flex; gap:11px; padding:12px; border:1px solid #dbeafe; border-radius:12px; background:#eff6ff; }
-        .landingAiIcon { width:32px; height:32px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:9px; background:#2563eb; color:#fff; }
-        .landingAiBox strong { display:block; font-size:9px; color:#0f172a; margin-bottom:4px; }
-        .landingAiBox p { margin:0; color:#64748b; font-size:8px; line-height:1.55; }
+        .landingProof { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:-6px; }
+        .landingProofCard { padding:17px 18px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; box-shadow:0 10px 25px rgba(15,23,42,.035); }
+        .landingProofCard strong { display:block; margin-bottom:5px; font-size:11px; }
+        .landingProofCard p { margin:0; color:#64748b; font-size:9px; line-height:1.65; }
 
-        .landingFeatures { background:#0b1220; color:#e2e8f0; padding:82px 24px; }
-        .landingSection { max-width:1120px; margin:0 auto; }
-        .landingSectionHead { max-width:700px; margin-bottom:36px; }
-        .landingSectionHead span { color:#60a5fa; font-size:9px; font-weight:850; letter-spacing:1.6px; text-transform:uppercase; }
-        .landingSectionHead h2 { margin:8px 0 9px; color:#f8fafc; font-size:35px; letter-spacing:-1.3px; }
-        .landingSectionHead p { margin:0; color:#94a3b8; font-size:12px; line-height:1.7; }
-        .landingFeatureGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:13px; }
-        .landingFeature { min-height:145px; padding:20px; border:1px solid #253044; border-radius:15px; background:#111827; transition:.18s ease; }
-        .landingFeature:hover { transform:translateY(-2px); border-color:#334a70; background:#131e30; }
-        .landingFeatureIcon { width:35px; height:35px; display:flex; align-items:center; justify-content:center; border-radius:9px; background:#172554; color:#60a5fa; margin-bottom:15px; }
-        .landingFeature strong { display:block; color:#f8fafc; font-size:12px; margin-bottom:7px; }
-        .landingFeature p { margin:0; color:#94a3b8; font-size:10px; line-height:1.65; }
+        .landingFeatureGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+        .landingFeatureCard { min-height:182px; padding:20px; border:1px solid #e2e8f0; border-radius:15px; background:#fff; transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease; }
+        .landingFeatureCard:hover { transform:translateY(-4px); border-color:#bfdbfe; box-shadow:0 16px 35px rgba(15,23,42,.07); }
+        .landingFeatureIcon { width:35px; height:35px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:#eff6ff; color:#2563eb; margin-bottom:15px; }
+        .landingFeatureIcon svg { width:16px; height:16px; }
+        .landingFeatureCard strong { display:block; margin-bottom:7px; font-size:11px; }
+        .landingFeatureCard p { margin:0; color:#64748b; font-size:9px; line-height:1.7; }
 
-        .landingHow { padding:82px 24px; background:#fff; }
-        .landingHowGrid { max-width:1040px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-        .landingHowCard { position:relative; padding:20px; border:1px solid #e5e7eb; border-radius:15px; background:#fff; }
-        .landingHowNumber { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:9px; background:#eff6ff; color:#2563eb; font-size:9px; font-weight:850; margin-bottom:15px; }
-        .landingHowCard strong { display:block; font-size:11px; margin-bottom:6px; }
-        .landingHowCard p { margin:0; color:#64748b; font-size:9px; line-height:1.6; }
+        .landingProduct { display:grid; grid-template-columns:.88fr 1.12fr; gap:55px; align-items:center; }
+        .landingProductMock { padding:17px; border:1px solid #dbe3ef; border-radius:18px; background:#0f172a; box-shadow:0 25px 65px rgba(15,23,42,.16); }
+        .landingMockTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:13px; color:#94a3b8; font-size:8px; }
+        .landingMockTitle { color:#f8fafc; font-size:11px; font-weight:800; }
+        .landingMockGrid { display:grid; grid-template-columns:1.15fr .85fr; gap:10px; }
+        .landingMockPanel { padding:13px; border:1px solid #263449; border-radius:11px; background:#111c2e; }
+        .landingMockPanel strong { display:block; color:#f8fafc; font-size:9px; }
+        .landingMockPanel span { display:block; color:#64748b; font-size:7px; margin-top:4px; }
+        .landingMockQueue { margin-top:10px; display:grid; gap:7px; }
+        .landingMockQueueRow { display:flex; align-items:center; justify-content:space-between; padding:8px 9px; border:1px solid #263449; border-radius:8px; background:#0d1727; }
+        .landingMockQueueRow > div { display:flex; align-items:center; gap:7px; }
+        .landingMockQueueDot { width:7px; height:7px; border-radius:50%; background:#22c55e; }
+        .landingMockQueueRow span { color:#cbd5e1; font-size:7px; }
+        .landingMockQueueRow em { color:#93c5fd; font-size:7px; font-style:normal; font-weight:750; }
+        .landingProductCopy h2 { margin:9px 0 12px; font-size:34px; line-height:1.12; letter-spacing:-1.7px; }
+        .landingProductCopy p { margin:0 0 18px; color:#64748b; font-size:13px; line-height:1.75; }
+        .landingCheckList { display:grid; gap:11px; }
+        .landingCheckItem { display:flex; align-items:flex-start; gap:9px; color:#334155; font-size:10px; line-height:1.5; font-weight:700; }
+        .landingCheckItem svg { flex:0 0 auto; margin-top:1px; color:#16a34a; }
 
-        .landingBottom { padding:82px 24px 35px; background:#f8fafc; }
-        .landingBottomCard { max-width:920px; margin:0 auto; padding:46px 38px; border:1px solid #dbeafe; border-radius:22px; background:linear-gradient(135deg,#eff6ff,#f8fbff); text-align:center; box-sizing:border-box; box-shadow:0 20px 55px rgba(37,99,235,.07); }
-        .landingBottomCard .landingKicker { display:block; }
-        .landingBottomCard h2 { margin:9px 0 10px; color:#0f172a; font-size:34px; letter-spacing:-1.3px; }
-        .landingBottomCard p { max-width:610px; margin:0 auto; color:#64748b; font-size:12px; line-height:1.7; }
-        .landingBottomCard .landingHeroActions { justify-content:center; }
-        .landingFooter { padding:22px 24px; border-top:1px solid #e5e7eb; background:#fff; color:#94a3b8; text-align:center; font-size:9px; }
-        @media (max-width:950px) { .landingHero { grid-template-columns:1fr; padding-top:55px; } .landingHero h1 { font-size:49px; } .landingPreview { max-width:700px; width:100%; margin:0 auto; } .landingProblemGrid,.landingProductShowcase { grid-template-columns:1fr; } .landingHowGrid { grid-template-columns:repeat(2,1fr); } .landingFeatureGrid { grid-template-columns:repeat(2,1fr); } }
-        @media (max-width:650px) { .landingNav { padding:0 15px; } .landingNavButton:not(.landingNavPrimary) { display:none; } .landingHero { padding:43px 16px 55px; gap:38px; } .landingHero h1 { font-size:39px; letter-spacing:-2px; } .landingHeroText { font-size:13px; } .landingHeroMini { gap:11px; } .landingStats,.landingPreviewBottom,.landingCustomerGrid { grid-template-columns:1fr; } .landingTableRow { grid-template-columns:1.25fr 1fr; } .landingTableRow span:last-child { display:none; } .landingProblem,.landingProduct,.landingFeatures,.landingHow,.landingBottom { padding-left:16px; padding-right:16px; } .landingProblemGrid { gap:32px; } .landingProblem h2,.landingProductHead h2,.landingSectionHead h2 { font-size:29px; } .landingProblemList,.landingHowGrid { grid-template-columns:1fr; } .landingFeatureGrid { grid-template-columns:1fr; } .landingBottomCard { padding:32px 20px; } .landingBottomCard h2 { font-size:28px; } .landingWorkflowLabel { font-size:6px; } }
+        .landingHow { max-width:1240px; margin:0 auto; padding:88px 24px; scroll-margin-top:72px; }
+        .landingHowGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+        .landingHowCard { position:relative; min-height:190px; padding:20px; border:1px solid #e2e8f0; border-radius:15px; background:#fff; }
+        .landingHowNumber { display:inline-flex; width:30px; height:30px; align-items:center; justify-content:center; border-radius:9px; background:#eff6ff; color:#2563eb; font-size:9px; font-weight:900; margin-bottom:18px; }
+        .landingHowCard strong { display:block; font-size:11px; margin-bottom:7px; }
+        .landingHowCard p { margin:0; color:#64748b; font-size:9px; line-height:1.7; }
+        .landingHowCard:not(:last-child)::after { content:""; position:absolute; width:28px; height:1px; background:#cbd5e1; right:-21px; top:35px; z-index:2; }
+
+        .landingBottom { max-width:1240px; margin:0 auto; padding:0 24px 88px; }
+        .landingBottomCard { position:relative; overflow:hidden; padding:52px 48px; border-radius:22px; background:#0f172a; color:#fff; box-shadow:0 25px 60px rgba(15,23,42,.15); }
+        .landingBottomCard::after { content:""; position:absolute; width:360px; height:360px; border-radius:50%; background:#2563eb; opacity:.22; filter:blur(65px); right:-100px; top:-160px; pointer-events:none; }
+        .landingBottomCard h2 { position:relative; z-index:1; max-width:700px; margin:9px 0 10px; font-size:34px; line-height:1.12; letter-spacing:-1.7px; }
+        .landingBottomCard p { position:relative; z-index:1; max-width:650px; margin:0; color:#94a3b8; font-size:12px; line-height:1.75; }
+        .landingBottomCard .landingKicker { position:relative; z-index:1; color:#93c5fd; }
+        .landingBottomCard .landingHeroActions { position:relative; z-index:1; }
+        .landingBottomCard .landingSecondary { background:transparent; border-color:#334155; color:#e2e8f0; }
+        .landingBottomCard .landingSecondary:hover { background:#1e293b; color:#fff; }
+        .landingFooter { max-width:1240px; margin:0 auto; padding:0 24px 30px; color:#94a3b8; text-align:center; font-size:9px; }
+        .landingMobileCta { display:none; }
+        .landingMobileCta button { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; min-height:44px; border:1px solid #2563eb; border-radius:11px; background:#2563eb; color:#fff; font:inherit; font-size:11px; font-weight:800; cursor:pointer; box-shadow:0 8px 24px rgba(37,99,235,.22); }
+        .landingFooterInner { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
+        .landingFooterLinks { display:flex; align-items:center; gap:7px; }
+        .landingFooterLinks button { border:0; padding:0; background:transparent; color:#60a5fa; cursor:pointer; font:inherit; }
+        .landingFooterLinks button:hover { color:#93c5fd; text-decoration:underline; }
+
+        @media (max-width:950px) {
+          .landingNavLinks { display:none; }
+          .landingHero { grid-template-columns:1fr; gap:45px; padding-top:58px; }
+          .landingHero h1 { font-size:52px; }
+          .landingPreview { max-width:720px; width:100%; margin:0 auto; }
+          .landingFeatureGrid { grid-template-columns:repeat(2,1fr); }
+          .landingProduct { grid-template-columns:1fr; gap:35px; }
+          .landingHowGrid { grid-template-columns:repeat(2,1fr); }
+          .landingHowCard:not(:last-child)::after { display:none; }
+        }
+        @media (max-width:650px) {
+          .landingNav { height:64px; padding:0 15px; }
+          .landingBrandSub { display:none; }
+          .landingNavButton { padding:8px 9px; font-size:10px; }
+          .landingHero { padding:46px 16px 65px; gap:38px; }
+          .landingHero h1 { font-size:40px; letter-spacing:-2.3px; }
+          .landingHeroText { font-size:13px; }
+          .landingHeroActions { display:grid; grid-template-columns:1fr; }
+          .landingCta { width:100%; }
+          .landingHeroMini { gap:11px; }
+          .landingHeroMiniItem { font-size:8px; }
+          .landingPreviewBadge { right:4px; top:-17px; }
+          .landingDashboardCard { transform:none; border-radius:16px; }
+          .landingPreviewBody { padding:11px; }
+          .landingStats { gap:6px; }
+          .landingStat { padding:9px; }
+          .landingStat strong { font-size:14px; }
+          .landingPreviewRow { grid-template-columns:1.5fr .75fr .55fr; padding:0 8px; }
+          .landingSection,.landingHow { padding:65px 16px; }
+          .landingSectionHead h2,.landingProductCopy h2,.landingBottomCard h2 { font-size:28px; }
+          .landingProof { grid-template-columns:1fr; }
+          .landingFeatureGrid,.landingHowGrid { grid-template-columns:1fr; }
+          .landingFeatureCard,.landingHowCard { min-height:auto; }
+          .landingProductMock { padding:11px; }
+          .landingBottom { padding:0 16px 65px; }
+          .landingBottomCard { padding:35px 23px; border-radius:17px; }
+          .landingFooter { padding:0 16px 90px; line-height:1.6; }
+          .landingMobileCta { display:block; position:fixed; left:12px; right:12px; bottom:12px; z-index:60; padding:0; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+          .landingDashboardCard,.landingFeatureCard,.landingCta { transition:none; }
+        }
       `}</style>
 
-      <header className="landingNav">
-        <div className="landingBrand">
+      <nav className="landingNav">
+        <div className="landingBrand" onClick={() => scrollTo("landing-top")}>
           <div className="landingBrandIcon"><Monitor size={20} /></div>
           <div>
-            <div className="landingBrandName">CyberCafe</div>
-            <div className="landingBrandSub">HELPER</div>
+            <div className="landingBrandName">CyberCafe Helper</div>
+            <div className="landingBrandSub">WORKSPACE</div>
           </div>
         </div>
+
+        <div className="landingNavLinks">
+          <button className="landingNavLink" onClick={() => scrollTo("landing-features")}>Features</button>
+          <button className="landingNavLink" onClick={() => scrollTo("landing-product")}>How it helps</button>
+          <button className="landingNavLink" onClick={() => scrollTo("landing-how")}>How it works</button>
+        </div>
+
         <div className="landingNavActions">
           <button className="landingNavButton" onClick={onSignIn}>Sign In</button>
           <button className="landingNavButton landingNavPrimary" onClick={onSignUp}>Get Started</button>
         </div>
-      </header>
+      </nav>
 
-      <main>
+      <main id="landing-top">
         <section className="landingHero">
-          <div className="landingGlow" />
+          <div className="landingGlowOne" />
+          <div className="landingGlowTwo" />
           <div className="landingHeroCopy">
-            <div className="landingEyebrow"><ShieldCheck size={12} /> Built for Cyber Cafés & Digital Seva</div>
+            <div className="landingEyebrow"><Zap /> Built for everyday cyber café work</div>
             <h1>Run your cyber café with <span>less chaos.</span></h1>
-            <p className="landingHeroText">
-              CyberCafe Helper brings customer management, application tracking, documents, payments, follow-ups, reports and AI assistance into one focused workspace — built around the way cyber cafés actually work.
-            </p>
+            <p className="landingHeroText">Customers, applications, documents, payments, follow-ups and print requests — organized in one workspace built around how cyber cafés actually operate.</p>
             <div className="landingHeroActions">
               <button className="landingCta" onClick={onSignUp}>Create Your Free Workspace <ChevronRight size={15} /></button>
-              <button className="landingCta landingSecondary" onClick={onSignIn}>Sign In</button>
+              <button className="landingCta landingSecondary" onClick={() => scrollTo("landing-product")}>See How It Works</button>
             </div>
-            <div className="landingTrust"><CheckCircle2 size={14} /> One workspace for your daily operations</div>
+            <div className="landingTrust"><ShieldCheck size={13} /> Your workspace keeps operational data organized and access-controlled.</div>
             <div className="landingHeroMini">
-              <div className="landingHeroMiniItem"><Users size={13} /> Customers</div>
-              <div className="landingHeroMiniItem"><Wallet size={13} /> Payments</div>
-              <div className="landingHeroMiniItem"><FileText size={13} /> Documents</div>
-              <div className="landingHeroMiniItem"><BarChart3 size={13} /> Reports</div>
+              <div className="landingHeroMiniItem"><Users size={13} /> Customer records</div>
+              <div className="landingHeroMiniItem"><ClipboardList size={13} /> Application tracking</div>
+              <div className="landingHeroMiniItem"><QrCode size={13} /> QR print requests</div>
             </div>
           </div>
 
           <div className="landingPreview">
+            <div className="landingPreviewBadge"><QrCode size={13} /> Customer → Café → Print Queue</div>
             <div className="landingDashboardCard">
-              <div className="landingPreviewTop"><span className="landingDot" /><span className="landingDot" /><span className="landingDot" /></div>
+              <div className="landingPreviewTop">
+                <span className="landingDot" /><span className="landingDot" /><span className="landingDot" />
+                <span className="landingPreviewTopTitle">CyberCafe Helper · Workspace</span>
+              </div>
               <div className="landingPreviewBody">
-                <div className="landingPreviewTitle"><strong>Today's Operations</strong><span>CYBERCAFE HELPER</span></div>
+                <div className="landingPreviewTitle"><strong>Today's workspace</strong><span>Live overview</span></div>
                 <div className="landingStats">
-                  <div className="landingStat"><span>NEW TODAY</span><strong>12</strong><em>+3 today</em></div>
-                  <div className="landingStat"><span>COLLECTED</span><strong>₹8.4K</strong><em>+12.8%</em></div>
-                  <div className="landingStat"><span>OUTSTANDING</span><strong>₹3.2K</strong><em>18 customers</em></div>
+                  <div className="landingStat"><span>Customers</span><strong>128</strong><em>+12 this week</em></div>
+                  <div className="landingStat"><span>Open work</span><strong>24</strong><em>5 need attention</em></div>
+                  <div className="landingStat"><span>Collected</span><strong>₹8.4k</strong><em>+18.6%</em></div>
                 </div>
                 <div className="landingPreviewTable">
-                  <div className="landingTableRow landingTableHeader"><span>Customer</span><span>Service</span><span>Status</span></div>
-                  <div className="landingTableRow"><strong>Rahul Kumar</strong><span>PAN Correction</span><span className="landingStatus">Processing</span></div>
-                  <div className="landingTableRow"><strong>Priya Sharma</strong><span>Aadhaar Update</span><span className="landingStatus">Completed</span></div>
-                  <div className="landingTableRow"><strong>Amit Verma</strong><span>Exam Form</span><span className="landingStatus">Pending</span></div>
-                </div>
-                <div className="landingPreviewBottom">
-                  <div className="landingPreviewModule">
-                    <div className="landingPreviewModuleHead"><FileText size={12} /> Document Progress</div>
-                    <div className="landingProgress"><span /></div>
+                  <div className="landingPreviewRow">
+                    <div className="landingPreviewCustomer"><div className="landingPreviewAvatar">RS</div><div><strong>Rahul Sharma</strong><span>PAN application</span></div></div>
+                    <div><span className="landingPreviewStatus">Processing</span></div><div className="landingPreviewAmount">₹350</div>
                   </div>
-                  <div className="landingPreviewModule">
-                    <div className="landingPreviewModuleHead"><Wallet size={12} /> Today's Collection</div>
-                    <div className="landingPaymentRow"><strong>₹18,450</strong><span className="landingPaymentGood">+18%</span></div>
+                  <div className="landingPreviewRow">
+                    <div className="landingPreviewCustomer"><div className="landingPreviewAvatar">PK</div><div><strong>Priya Kumari</strong><span>Document print · 6 pages</span></div></div>
+                    <div><span className="landingPreviewStatus">Printing</span></div><div className="landingPreviewAmount">₹12</div>
+                  </div>
+                  <div className="landingPreviewRow">
+                    <div className="landingPreviewCustomer"><div className="landingPreviewAvatar">AM</div><div><strong>Amit Meena</strong><span>Certificate application</span></div></div>
+                    <div><span className="landingPreviewStatus">Ready</span></div><div className="landingPreviewAmount">₹220</div>
                   </div>
                 </div>
+                <div className="landingPreviewFooter"><span>New customer print request</span><strong>QR request received</strong></div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="landingProblem">
-          <div className="landingProblemGrid">
-            <div>
-              <span className="landingKicker">The everyday problem</span>
-              <h2>Too many customers. Too many details. Too many places to remember.</h2>
-              <p className="landingProblemLead">A cyber café handles Aadhaar, PAN, exams, banking, certificates, payments and follow-ups every day. CyberCafe Helper turns that scattered work into a single operating system for your business.</p>
-            </div>
-            <div className="landingProblemList">
-              <div className="landingProblemItem"><div className="landingProblemIcon"><Users size={15} /></div><div><strong>Customer details get scattered</strong><p>Keep every customer and their work together.</p></div></div>
-              <div className="landingProblemItem"><div className="landingProblemIcon"><FileText size={15} /></div><div><strong>Documents are easy to miss</strong><p>See what has arrived and what is still pending.</p></div></div>
-              <div className="landingProblemItem"><div className="landingProblemIcon"><Wallet size={15} /></div><div><strong>Payments become confusing</strong><p>Know exactly what was paid and what is due.</p></div></div>
-              <div className="landingProblemItem"><div className="landingProblemIcon"><CalendarDays size={15} /></div><div><strong>Follow-ups get forgotten</strong><p>Turn reminders into scheduled work.</p></div></div>
-            </div>
+        <section className="landingSection" style={{paddingTop:0}}>
+          <div className="landingProof">
+            <div className="landingProofCard"><strong>One workspace</strong><p>Keep customer and operational information together instead of spreading it across notebooks and chats.</p></div>
+            <div className="landingProofCard"><strong>Less manual tracking</strong><p>Use statuses, reminders and payment records to reduce the work of remembering what happens next.</p></div>
+            <div className="landingProofCard"><strong>Built around the counter</strong><p>Fast customer entry, practical workflows and a dedicated QR print experience for daily café operations.</p></div>
           </div>
         </section>
 
-        <section className="landingProduct">
-          <div className="landingProductInner">
-            <div className="landingProductHead">
-              <span className="landingKicker">See how it works</span>
-              <h2>One customer record. Every important detail.</h2>
-              <p>Instead of jumping between notebooks, spreadsheets, payment notes and browser tabs, the workspace keeps the whole customer journey together.</p>
-            </div>
-            <div className="landingProductShowcase">
-              <div className="landingShowcaseCard">
-                <div className="landingShowcaseHeader"><strong>Application Workflow</strong><span>PAN CORRECTION</span></div>
-                <div className="landingShowcaseBody">
-                  <div className="landingWorkflow">
-                    <div className="landingWorkflowStep"><div className="landingWorkflowDot">1</div><div className="landingWorkflowLabel">New</div></div><div className="landingWorkflowLine" />
-                    <div className="landingWorkflowStep"><div className="landingWorkflowDot">2</div><div className="landingWorkflowLabel">Documents</div></div><div className="landingWorkflowLine" />
-                    <div className="landingWorkflowStep"><div className="landingWorkflowDot">3</div><div className="landingWorkflowLabel">Submitted</div></div><div className="landingWorkflowLine" />
-                    <div className="landingWorkflowStep"><div className="landingWorkflowDot">4</div><div className="landingWorkflowLabel">Processing</div></div><div className="landingWorkflowLine" />
-                    <div className="landingWorkflowStep"><div className="landingWorkflowDot">5</div><div className="landingWorkflowLabel">Completed</div></div>
+        <section className="landingSection landingSectionSoft" id="landing-features">
+          <div className="landingSectionHead">
+            <span className="landingKicker">Everything in one place</span>
+            <h2>Tools for the work you already do.</h2>
+            <p>CyberCafe Helper brings the operational pieces of a modern cyber café into one simple workspace, so your team can spend less time maintaining records and more time serving customers.</p>
+          </div>
+          <div className="landingFeatureGrid">
+            {features.map(([Icon, title, text]) => (
+              <div className="landingFeatureCard" key={title}>
+                <div className="landingFeatureIcon"><Icon /></div>
+                <strong>{title}</strong>
+                <p>{text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="landingSection" id="landing-product">
+          <div className="landingProduct">
+            <div className="landingProductMock">
+              <div className="landingMockTop"><span>LIVE WORKSPACE PREVIEW</span><span>Today</span></div>
+              <div className="landingMockGrid">
+                <div className="landingMockPanel"><strong>Print Queue</strong><span>Requests arriving from your café QR</span>
+                  <div className="landingMockQueue">
+                    <div className="landingMockQueueRow"><div><span className="landingMockQueueDot" /><span>Priya · 6 pages</span></div><em>₹12</em></div>
+                    <div className="landingMockQueueRow"><div><span className="landingMockQueueDot" /><span>Arjun · 3 pages</span></div><em>₹6</em></div>
+                    <div className="landingMockQueueRow"><div><span className="landingMockQueueDot" /><span>Neha · 8 pages</span></div><em>₹16</em></div>
                   </div>
-                  <div className="landingCustomerCard">
-                    <div className="landingCustomerTop">
-                      <div className="landingCustomerIdentity"><div className="landingAvatar">RK</div><div><strong>Rahul Kumar</strong><span>Ref: PAN123456 • Delhi</span></div></div>
-                      <span className="landingBadge">Processing</span>
-                    </div>
-                    <div className="landingCustomerGrid">
-                      <div className="landingCustomerMetric"><span>DOCUMENTS</span><strong>2 / 3 received</strong></div>
-                      <div className="landingCustomerMetric"><span>PAYMENT</span><strong>₹100 / ₹250</strong></div>
-                      <div className="landingCustomerMetric"><span>NEXT ACTION</span><strong>Follow-up</strong></div>
-                    </div>
+                </div>
+                <div className="landingMockPanel"><strong>Follow-ups</strong><span>Things that need attention</span>
+                  <div className="landingMockQueue">
+                    <div className="landingMockQueueRow"><div><span>Document request</span></div><em>2:00 PM</em></div>
+                    <div className="landingMockQueueRow"><div><span>Payment reminder</span></div><em>4:30 PM</em></div>
+                    <div className="landingMockQueueRow"><div><span>Pickup reminder</span></div><em>6:00 PM</em></div>
                   </div>
                 </div>
               </div>
-
-              <div className="landingSideStack">
-                <div className="landingShowcaseCard">
-                  <div className="landingShowcaseHeader"><strong>Daily Control Center</strong><span>AT A GLANCE</span></div>
-                  <div className="landingShowcaseBody">
-                    <div className="landingMiniRows">
-                      <div className="landingMiniRow"><div className="landingMiniIcon"><Wallet size={13} /></div><div><strong>Payments collected</strong><span>Cash + UPI + Card</span></div><span className="landingMiniAmount">₹18,450</span></div>
-                      <div className="landingMiniRow"><div className="landingMiniIcon"><CircleAlert size={13} /></div><div><strong>Outstanding amount</strong><span>Customers with balance due</span></div><span className="landingMiniAmount">₹3,200</span></div>
-                      <div className="landingMiniRow"><div className="landingMiniIcon"><CalendarDays size={13} /></div><div><strong>Today's follow-ups</strong><span>Calls and reminders</span></div><span className="landingMiniAmount">6</span></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="landingShowcaseCard">
-                  <div className="landingShowcaseHeader"><strong>AI Customer Assistant</strong><span>AI COPILOT</span></div>
-                  <div className="landingShowcaseBody">
-                    <div className="landingAiBox"><div className="landingAiIcon"><Sparkles size={15} /></div><div><strong>Next best action</strong><p>Customer is in Processing. One document is pending and ₹150 remains due. Follow up with the customer and confirm the missing document.</p></div></div>
-                  </div>
-                </div>
+            </div>
+            <div className="landingProductCopy">
+              <span className="landingKicker">Designed for the counter</span>
+              <h2>One place to see what needs to happen next.</h2>
+              <p>Instead of jumping between paper notes, spreadsheets and messaging apps, use one workspace to keep the customer, their work, payment status and next action connected.</p>
+              <div className="landingCheckList">
+                <div className="landingCheckItem"><CheckCircle2 size={14} /> Track every application through clear workflow stages.</div>
+                <div className="landingCheckItem"><CheckCircle2 size={14} /> Record collections and outstanding amounts against completed work.</div>
+                <div className="landingCheckItem"><CheckCircle2 size={14} /> Receive customer print requests through a café-specific QR code.</div>
+                <div className="landingCheckItem"><CheckCircle2 size={14} /> Keep follow-ups visible so important tasks do not disappear.</div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="landingFeatures">
-          <div className="landingSection">
-            <div className="landingSectionHead">
-              <span>Everything in one place</span>
-              <h2>More than a customer list.</h2>
-              <p>A complete workspace for running the operational side of a modern cyber café — from the first customer visit to payment collection and final delivery.</p>
-            </div>
-            <div className="landingFeatureGrid">
-              {features.map(([Icon, title, text]) => (
-                <div className="landingFeature" key={title}>
-                  <div className="landingFeatureIcon"><Icon size={17} /></div>
-                  <strong>{title}</strong>
-                  <p>{text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="landingHow">
-          <div className="landingProductHead">
+        <section className="landingHow landingSectionSoft" id="landing-how">
+          <div className="landingSectionHead">
             <span className="landingKicker">Simple daily workflow</span>
             <h2>From customer visit to completed work.</h2>
-            <p>CyberCafe Helper is designed to fit into the normal flow of a cyber café instead of forcing you to change how you work.</p>
+            <p>CyberCafe Helper fits into the normal flow of a cyber café instead of forcing you to redesign how you work.</p>
           </div>
           <div className="landingHowGrid">
-            <div className="landingHowCard"><div className="landingHowNumber">01</div><strong>Add the customer</strong><p>Capture the customer's basic details, service, reference and expected amount.</p></div>
+            <div className="landingHowCard"><div className="landingHowNumber">01</div><strong>Add the customer</strong><p>Capture the customer's details, service, reference and expected amount.</p></div>
             <div className="landingHowCard"><div className="landingHowNumber">02</div><strong>Track the work</strong><p>Use documents and workflow stages to see exactly where the application stands.</p></div>
-            <div className="landingHowCard"><div className="landingHowNumber">03</div><strong>Collect & follow up</strong><p>Record payments and schedule reminders for anything that needs your attention.</p></div>
+            <div className="landingHowCard"><div className="landingHowNumber">03</div><strong>Collect & follow up</strong><p>Record payments and schedule reminders for anything that needs attention.</p></div>
             <div className="landingHowCard"><div className="landingHowNumber">04</div><strong>Complete & report</strong><p>Finish the work, issue a receipt and understand your business activity through reports.</p></div>
           </div>
         </section>
@@ -1791,7 +1843,7 @@ function LandingPage({ onSignIn, onSignUp }) {
           <div className="landingBottomCard">
             <span className="landingKicker">Start your workspace</span>
             <h2>Spend less time remembering. More time serving customers.</h2>
-            <p>Create your CyberCafe Helper workspace and bring customers, applications, documents, payments and follow-ups together in one place.</p>
+            <p>Create your CyberCafe Helper workspace and bring customers, applications, documents, payments, follow-ups and print requests together.</p>
             <div className="landingHeroActions">
               <button className="landingCta" onClick={onSignUp}>Create Your Free Workspace <ChevronRight size={15} /></button>
               <button className="landingCta landingSecondary" onClick={onSignIn}>I Already Have an Account</button>
@@ -1800,60 +1852,272 @@ function LandingPage({ onSignIn, onSignUp }) {
         </section>
       </main>
 
-      <footer className="landingFooter">© {new Date().getFullYear()} CyberCafe Helper • Professional workspace for cyber café operators</footer>
+      <div className="landingMobileCta">
+        <button type="button" onClick={onSignUp}>Create Your Free Workspace <ChevronRight size={14} /></button>
+      </div>
+
+      <footer className="landingFooter">
+        <div className="landingFooterInner">
+          <div>© {new Date().getFullYear()} CyberCafe Helper • Professional workspace for cyber café operators</div>
+          <div className="landingFooterLinks">
+            <button onClick={() => window.dispatchEvent(new CustomEvent("cc-open-legal", { detail: "privacy" }))}>Privacy Policy</button>
+            <span>•</span>
+            <button onClick={() => window.dispatchEvent(new CustomEvent("cc-open-legal", { detail: "terms" }))}>Terms &amp; Conditions</button>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
+
+const LEGAL_VERSION = "1.0";
+
+function LegalPage({ type, onBack, onSignUp }) {
+  const isPrivacy = type === "privacy";
+  const title = isPrivacy ? "Privacy Policy" : "Terms & Conditions";
+  const updated = "September 8, 2026";
+
+  return (
+    <div className="legalPage">
+      <style>{`
+        .legalPage{min-height:100vh;background:#0b1220;color:#cbd5e1;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+        .legalNav{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 24px;border-bottom:1px solid #1e293b;background:rgba(11,18,32,.94);backdrop-filter:blur(12px);}
+        .legalBrand{display:flex;align-items:center;gap:10px;border:0;background:transparent;color:#f8fafc;cursor:pointer;font:inherit;font-weight:800;}
+        .legalBrandIcon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#2563eb;color:#fff;}
+        .legalNavActions{display:flex;align-items:center;gap:8px;}
+        .legalNavButton{border:1px solid #334155;border-radius:9px;background:#111827;color:#cbd5e1;padding:8px 11px;cursor:pointer;font:inherit;font-size:10px;font-weight:700;}
+        .legalNavButton:hover{background:#1e293b;color:#fff;}
+        .legalNavPrimary{border-color:#2563eb;background:#2563eb;color:#fff;}
+        .legalWrap{width:min(900px,100%);margin:0 auto;padding:55px 24px 80px;box-sizing:border-box;}
+        .legalKicker{color:#60a5fa;font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;}
+        .legalWrap h1{margin:8px 0 8px;color:#f8fafc;font-size:38px;letter-spacing:-1.2px;}
+        .legalUpdated{margin:0 0 35px;color:#64748b;font-size:10px;}
+        .legalIntro{margin:0 0 28px;padding:16px 17px;border:1px solid #26354b;border-radius:13px;background:#101827;color:#cbd5e1;font-size:12px;line-height:1.75;}
+        .legalWrap section{margin:0 0 30px;}
+        .legalWrap h2{margin:0 0 9px;color:#f8fafc;font-size:18px;letter-spacing:-.3px;}
+        .legalWrap h3{margin:17px 0 7px;color:#e2e8f0;font-size:13px;}
+        .legalWrap p,.legalWrap li{color:#94a3b8;font-size:11px;line-height:1.8;}
+        .legalWrap p{margin:0 0 10px;}
+        .legalWrap ul{margin:7px 0 0;padding-left:20px;}
+        .legalWrap a{color:#60a5fa;text-decoration:none;}
+        .legalWrap a:hover{text-decoration:underline;}
+        .legalFooter{border-top:1px solid #1e293b;padding:22px 24px 30px;text-align:center;color:#64748b;font-size:9px;}
+        .legalFooter button{border:0;background:transparent;color:#60a5fa;cursor:pointer;font:inherit;}
+        @media(max-width:650px){.legalNav{padding:12px 15px}.legalBrand span{display:none}.legalNavButton{padding:8px 9px}.legalWrap{padding:38px 16px 60px}.legalWrap h1{font-size:31px}.legalWrap p,.legalWrap li{font-size:10.5px}}
+      `}</style>
+
+      <nav className="legalNav">
+        <button className="legalBrand" onClick={onBack} aria-label="Back to CyberCafe Helper home">
+          <span className="legalBrandIcon"><Monitor size={17} /></span>
+          <span>CyberCafe Helper</span>
+        </button>
+        <div className="legalNavActions">
+          <button className="legalNavButton" onClick={onBack}>Back to Home</button>
+          <button className="legalNavButton legalNavPrimary" onClick={onSignUp}>Get Started</button>
+        </div>
+      </nav>
+
+      <main className="legalWrap">
+        <div className="legalKicker">CyberCafe Helper · Legal</div>
+        <h1>{title}</h1>
+        <p className="legalUpdated">Effective / last updated: {updated} · Version {LEGAL_VERSION}</p>
+
+        {isPrivacy ? (
+          <>
+            <div className="legalIntro">
+              This Privacy Policy explains how CyberCafe Helper handles personal data when you use the website, create a workspace, use café-management features, or submit information through a café's customer print QR flow. We aim to collect only what is reasonably needed to provide the requested service and to keep access controlled.
+            </div>
+
+            <section><h2>1. Who this policy applies to</h2><p>This policy applies to users of CyberCafe Helper, including café owners, administrators, staff, customer accounts, and visitors or customers who use a café-specific QR page to submit a print request.</p><p>For customer information entered into a café workspace, the café may also have responsibilities as the party deciding why that customer information is collected and how it is used. CyberCafe Helper provides the technical workspace and processing service.</p></section>
+
+            <section><h2>2. Information we collect</h2><p>Depending on how you use the service, we may process:</p><ul><li><strong>Account data:</strong> email address, authentication information, account metadata, and the business/café name supplied during signup.</li><li><strong>Workspace data:</strong> café name, phone, address, GSTIN or other business details you choose to enter, service templates, quick links, follow-ups, and workspace settings.</li><li><strong>Customer data:</strong> customer name, phone number, service/application details, notes, payment status and related operational records entered by a café.</li><li><strong>Print-job data:</strong> customer name and optional phone number, selected print settings, status, pricing, payment information, timestamps, and uploaded file metadata.</li><li><strong>Uploaded documents:</strong> files submitted through the café QR print flow, such as PDFs, images and supported office documents. These files are stored in the private print-document storage used by the service.</li><li><strong>Technical information:</strong> information necessary for authentication, security, error handling and normal operation of the website and hosting infrastructure.</li></ul></section>
+
+            <section><h2>3. Why we use personal data</h2><p>We use personal data for specific operational purposes, including:</p><ul><li>creating and securing user accounts;</li><li>providing the café workspace and its requested features;</li><li>managing customers, applications, print requests, follow-ups and payment records;</li><li>receiving and processing customer print requests through a café's QR code;</li><li>showing print-job status and estimated pricing to the person who submitted a request;</li><li>providing requested AI-assisted customer summaries where that feature is used;</li><li>responding to support requests and maintaining service security;</li><li>preventing misuse, unauthorized access and security incidents; and</li><li>meeting applicable legal or regulatory obligations.</li></ul></section>
+
+            <section><h2>4. Consent and choice</h2><p>Where we rely on consent, we ask for it through a clear affirmative action and describe the relevant processing in understandable language. You should not provide personal data that is not needed for the service you are requesting.</p><p>You may withdraw consent where consent is the basis for processing. Withdrawal does not invalidate processing that was already lawful before withdrawal. Some service features may no longer be available if the data required to provide them is no longer available.</p></section>
+
+            <section><h2>5. Customer QR print requests</h2><p>A café-specific QR page allows a customer to submit files without creating a CyberCafe Helper account. The information submitted through that page is used to create and fulfill the requested print job and to provide status information.</p><p>Uploaded documents are private rather than publicly listed. Authorized café managers can access the files needed to process the print job. Temporary signed download links are used for authorized file access rather than exposing the private storage location directly.</p><p>Customers should submit only documents necessary for the requested service and should avoid sending sensitive information that the café does not need.</p></section>
+
+            <section><h2>6. Service providers and infrastructure</h2><p>CyberCafe Helper relies on third-party infrastructure and service providers to operate the application, including cloud database/authentication/storage infrastructure, hosting, payment processing where enabled, and AI processing where the AI feature is used. Data is shared with such providers only as reasonably necessary to provide the requested functionality, secure the service, or comply with law.</p><p>The service currently uses Supabase for authentication, database and private file storage, Vercel for web hosting, Razorpay for payment-related processing where enabled, and Gemini through a server-side integration for the AI customer-summary feature. Provider practices may change as the service evolves, and this policy will be updated when material changes require it.</p></section>
+
+            <section><h2>7. Security</h2><p>We use access controls, authenticated workspace permissions, database row-level security, private document storage, short-lived signed file URLs, server-side handling of sensitive API credentials, and other reasonable technical safeguards appropriate to the service.</p><p>No internet service can guarantee absolute security. If we become aware of a security incident requiring notification under applicable law, we will follow the applicable notification requirements.</p></section>
+
+            <section><h2>8. Retention and deletion</h2><p>We retain information for as long as reasonably necessary to provide the service, maintain business records, resolve disputes, enforce agreements, protect the service, or satisfy legal obligations. Retention periods may differ between account records, operational records and uploaded documents.</p><p>Because café customers and café operators may have different relationships with the data, a request concerning a café's customer records may need to be coordinated with the relevant café. We do not promise automatic deletion immediately after every print job unless a specific retention feature or policy says otherwise.</p></section>
+
+            <section><h2>9. Your rights and requests</h2><p>Subject to applicable law, you may have rights relating to access to information about processing, correction, updating, withdrawal of consent where consent is the basis, and grievance or complaint mechanisms. Requests should clearly identify the account, workspace or print request involved and the action being requested.</p><p>For café-managed customer information, the café may need to participate in the response because it determines parts of the processing purpose and business context.</p></section>
+
+            <section><h2>10. Children's data</h2><p>CyberCafe Helper is intended for business and general public service use and is not designed to knowingly collect children's personal data for an independent purpose. A café or adult using the service should not submit a child's information unless they are authorized to do so and the applicable requirements have been satisfied.</p></section>
+
+            <section><h2>11. Changes to this policy</h2><p>We may update this Privacy Policy as the service, technology, legal requirements or data practices change. Material changes will be reflected by updating the version and effective date shown at the top of this page.</p></section>
+
+            <section><h2>12. Contact and grievances</h2><p>For privacy questions, data requests or grievances, use the support/contact method made available by CyberCafe Helper on the website or within the service. When making a request, provide enough information for us to identify the relevant account, workspace or request without sending unnecessary personal data.</p></section>
+          </>
+        ) : (
+          <>
+            <div className="legalIntro">
+              These Terms & Conditions govern your use of CyberCafe Helper. By creating an account or using the service, you agree to these terms. If you do not agree, do not create an account or use the service.
+            </div>
+
+            <section><h2>1. The service</h2><p>CyberCafe Helper is a software service designed to help cyber café operators organize customers, applications, documents, print requests, payments, follow-ups and related operational work.</p><p>Features may change over time. We may add, remove, improve or discontinue features, including integrations and third-party services, subject to applicable law.</p></section>
+
+            <section><h2>2. Accounts and access</h2><p>You are responsible for providing accurate account information, protecting your credentials, and using your account only for lawful purposes. Do not share credentials in a way that allows unauthorized access to another person's account or workspace.</p><p>Workspace owners and administrators are responsible for assigning appropriate roles and ensuring that staff access is limited to people who need it.</p></section>
+
+            <section><h2>3. Café and customer responsibilities</h2><p>Café operators are responsible for the accuracy and lawfulness of the customer information they enter, the services they provide, their pricing, their payment collection, and their compliance with applicable laws.</p><p>Customers are responsible for submitting files and information they are authorized to provide. Do not upload unlawful, malicious, infringing or otherwise prohibited content.</p></section>
+
+            <section><h2>4. Uploaded documents</h2><p>The print QR feature is intended for legitimate document-printing workflows. You must not use it to distribute malware, unlawful material, content that infringes another person's rights, or information you are not authorized to submit.</p><p>CyberCafe Helper provides storage and delivery functionality but does not review every uploaded file. A café is responsible for handling the customer's print request appropriately.</p></section>
+
+            <section><h2>5. Payments and pricing</h2><p>Where payment features are enabled, the café controls its service pricing and is responsible for confirming the amount actually collected. Third-party payment providers may apply their own terms, fees and processing rules.</p><p>CyberCafe Helper is not the seller of the café's underlying services unless expressly stated otherwise. Disputes about a café's service, printing charge, refund or customer transaction should ordinarily be resolved with the relevant café.</p></section>
+
+            <section><h2>6. Acceptable use</h2><p>You must not use CyberCafe Helper to:</p><ul><li>break the law or facilitate unlawful activity;</li><li>attempt to gain unauthorized access to another workspace, account, document or system;</li><li>upload malware or intentionally harmful files;</li><li>probe, disrupt, overload or circumvent security controls;</li><li>impersonate another person or organization;</li><li>use the service to infringe intellectual-property, privacy or other rights; or</li><li>abuse public QR endpoints, automated requests or the service infrastructure.</li></ul></section>
+
+            <section><h2>7. Intellectual property</h2><p>CyberCafe Helper's software, branding, interface and original content are owned by or licensed to the service operator unless otherwise stated. These terms do not transfer ownership of the customer's or café's own data or documents.</p></section>
+
+            <section><h2>8. Third-party services</h2><p>The service may depend on third-party providers for hosting, authentication, storage, payments, AI functionality and other infrastructure. Third-party services may have their own terms and availability limitations. CyberCafe Helper is not responsible for failures caused solely by a third-party provider, except where applicable law provides otherwise.</p></section>
+
+            <section><h2>9. Availability and changes</h2><p>We aim to keep the service reliable but do not guarantee uninterrupted availability, error-free operation, or that every feature will always remain available. Maintenance, outages, security events, provider failures and other circumstances may temporarily affect the service.</p></section>
+
+            <section><h2>10. Suspension and termination</h2><p>We may suspend or terminate access where reasonably necessary to protect the service, comply with law, investigate abuse, address security risks, or enforce these terms. You may stop using the service at any time.</p><p>Termination does not remove obligations or rights that by their nature should continue, including provisions concerning misuse, intellectual property, liability and disputes.</p></section>
+
+            <section><h2>11. Disclaimer and limitation of liability</h2><p>To the extent permitted by law, the service is provided on an "as available" basis without guarantees that it will meet every particular business requirement. You remain responsible for verifying important customer, application, payment and print information.</p><p>To the extent permitted by applicable law, CyberCafe Helper will not be liable for indirect, incidental, special or consequential losses arising from use of the service. Nothing in these terms excludes liability that cannot lawfully be excluded.</p></section>
+
+            <section><h2>12. Indemnity</h2><p>To the extent permitted by law, you are responsible for claims, losses or expenses arising from your unlawful use of the service, your violation of these terms, or your submission or handling of data or content that you were not authorized to use.</p></section>
+
+            <section><h2>13. Governing law</h2><p>These terms are intended to be governed by the laws of India, subject to applicable mandatory legal rights and protections. Any dispute will be subject to the jurisdiction of the courts or dispute-resolution forum legally competent to hear it.</p></section>
+
+            <section><h2>14. Changes to these terms</h2><p>We may update these terms as the service changes or legal requirements develop. The version and effective date shown on this page will identify the current version. Continued use after an updated version becomes effective constitutes acceptance to the extent permitted by law.</p></section>
+
+            <section><h2>15. Contact</h2><p>For questions about these terms, use the support/contact method made available by CyberCafe Helper on the website or within the service.</p></section>
+          </>
+        )}
+      </main>
+
+      <footer className="legalFooter">© {new Date().getFullYear()} CyberCafe Helper · <button onClick={onBack}>Home</button></footer>
+    </div>
+  );
+}
 
 function AuthScreen({ initialMode = "login", onBackToLanding, onForgotPassword }) {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
     setError("");
     setMessage("");
+    setFieldErrors({});
 
     const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
-      setError("Please enter your email and password.");
+    const cleanBusinessName = businessName.trim();
+
+    if (!cleanEmail) {
+      setFieldErrors({ email: "Please enter your email address." });
       return;
     }
-    if (mode === "signup" && !businessName.trim()) {
-      setError("Please enter your cyber café / business name.");
+
+    if (!password) {
+      setFieldErrors({ password: "Please enter your password." });
       return;
     }
+
+    if (mode === "signup" && !cleanBusinessName) {
+      setFieldErrors({ businessName: "Please enter your cyber café / business name." });
+      return;
+    }
+
+    if (mode === "signup" && !consentAccepted) {
+      setFieldErrors({ consent: "Please accept the Terms & Privacy Policy to continue." });
+      return;
+    }
+
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
     }
 
     setLoading(true);
+
     try {
       if (mode === "login") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-        if (signInError) throw signInError;
+        const { error: signInError } =
+          await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password
+          });
+
+        if (signInError) {
+          const message = signInError.message?.toLowerCase() || "";
+
+          if (
+            message.includes("invalid login credentials") ||
+            message.includes("invalid credentials")
+          ) {
+            throw new Error(
+              "The email or password is incorrect. Please check your details and try again."
+            );
+          }
+
+          if (message.includes("email not confirmed")) {
+            throw new Error(
+              "Please confirm your email address before signing in."
+            );
+          }
+
+          throw new Error(
+            "We couldn't sign you in right now. Please check your details and try again."
+          );
+        }
       } else {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: { data: { business_name: businessName.trim() } }
-        });
-        if (signUpError) throw signUpError;
+        const { data, error: signUpError } =
+          await supabase.auth.signUp({
+            email: cleanEmail,
+            password,
+            options: {
+              data: {
+                business_name: cleanBusinessName,
+                terms_accepted_at: new Date().toISOString(),
+                terms_version: LEGAL_VERSION,
+                privacy_policy_version: LEGAL_VERSION
+              }
+            }
+          });
+
+        if (signUpError) {
+          const message = signUpError.message?.toLowerCase() || "";
+
+          if (message.includes("already registered")) {
+            throw new Error(
+              "This email may already have an account. Try signing in instead."
+            );
+          }
+
+          throw new Error(
+            "We couldn't create your account right now. Please check your details and try again."
+          );
+        }
+
         if (!data.session) {
-          setMessage("Account created. Check your email to confirm your account, then log in.");
+          setMessage(
+            "Account created. Check your email to confirm your account, then sign in."
+          );
           setMode("login");
           setPassword("");
+          setShowPassword(false);
         }
       }
     } catch (err) {
-      setError(err?.message || "Authentication failed. Please try again.");
+      setError(
+        err?.message ||
+        "Something went wrong. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -1863,91 +2127,622 @@ function AuthScreen({ initialMode = "login", onBackToLanding, onForgotPassword }
     setMode(nextMode);
     setError("");
     setMessage("");
+    setFieldErrors({});
     setPassword("");
+    setShowPassword(false);
+    setConsentAccepted(false);
   };
 
   return (
     <>
       <style>{`
-        .authShell { min-height:100vh; width:100%; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:28px; background:#0b1220; color:#e2e8f0; box-sizing:border-box; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-        .authBackgroundGlow { position:absolute; width:430px; height:430px; border-radius:50%; filter:blur(80px); opacity:.22; pointer-events:none; }
-        .authGlowOne { background:#2563eb; top:-180px; left:-130px; }
-        .authGlowTwo { background:#06b6d4; right:-170px; bottom:-190px; }
-        .authCard { position:relative; z-index:1; width:min(450px,100%); box-sizing:border-box; padding:32px; border:1px solid #26354b; border-radius:20px; background:rgba(17,24,39,.96); box-shadow:0 28px 80px rgba(0,0,0,.38); backdrop-filter:blur(12px); }
-        .authBack { display:inline-flex; align-items:center; gap:5px; border:0; background:transparent; color:#64748b; padding:0; margin-bottom:19px; cursor:pointer; font:inherit; font-size:9px; font-weight:700; }
-        .authBack:hover { color:#93c5fd; }
-        .authBrand { display:flex; align-items:center; gap:11px; margin-bottom:31px; }
-        .authBrandIcon { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:#2563eb; color:#fff; box-shadow:0 8px 24px rgba(37,99,235,.28); }
-        .authBrandName { color:#f8fafc; font-size:16px; font-weight:800; letter-spacing:-.3px; }
-        .authBrandSub { color:#60a5fa; font-size:9px; font-weight:800; letter-spacing:3px; margin-top:1px; }
-        .authIntro span { color:#60a5fa; font-size:9px; font-weight:800; letter-spacing:1.7px; }
-        .authIntro h1 { margin:7px 0 6px; color:#f8fafc; font-size:27px; line-height:1.15; letter-spacing:-.6px; }
-        .authIntro p { margin:0 0 25px; color:#94a3b8; font-size:11px; line-height:1.6; }
-        .authForm { display:flex; flex-direction:column; gap:15px; }
-        .authForm label { display:flex; flex-direction:column; gap:7px; }
-        .authForm label span { color:#cbd5e1; font-size:10px; font-weight:700; }
-        .authForm input { width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #334155; border-radius:10px; outline:none; background:#0f172a; color:#f8fafc; font:inherit; font-size:11px; transition:.18s ease; }
-        .authForm input::placeholder { color:#64748b; }
-        .authForm input:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.13); }
-        .authSubmit { width:100%; border:1px solid #2563eb; border-radius:10px; padding:11px 14px; background:#2563eb; color:#fff; cursor:pointer; font:inherit; font-size:11px; font-weight:800; margin-top:2px; transition:.18s ease; }
-        .authSubmit:hover:not(:disabled) { background:#1d4ed8; transform:translateY(-1px); box-shadow:0 8px 20px rgba(37,99,235,.22); }
-        .authSubmit:disabled { opacity:.65; cursor:wait; }
-        .authAlert { display:flex; align-items:flex-start; gap:8px; padding:10px 11px; border-radius:10px; font-size:10px; line-height:1.5; }
-        .authAlert svg { flex:none; margin-top:1px; }
-        .authAlertError { border:1px solid #7f1d1d; background:#2a1518; color:#fca5a5; }
-        .authAlertSuccess { border:1px solid #14532d; background:#10251a; color:#86efac; }
-        .authSwitch { display:flex; align-items:center; justify-content:center; gap:5px; margin-top:19px; color:#64748b; font-size:10px; }
-        .authSwitch button { border:0; padding:0; background:transparent; color:#60a5fa; cursor:pointer; font:inherit; font-weight:700; }
-        .authForgot { display:flex; justify-content:flex-end; margin-top:-7px; }
-        .authForgot button { border:0; padding:0; background:transparent; color:#60a5fa; cursor:pointer; font:inherit; font-size:9px; font-weight:700; }
-        .authForgot button:hover { color:#93c5fd; }
-        .authSecurityNote { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:22px; padding-top:16px; border-top:1px solid #253044; color:#64748b; font-size:9px; }
-        .authSecurityNote svg { color:#34d399; }
-        .authLoadingScreen { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:#0b1220; color:#94a3b8; font-size:11px; }
-        .authLoadingIcon { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:#2563eb; color:#fff; }
-        @media (max-width:520px) { .authShell { padding:14px; } .authCard { padding:24px 20px; border-radius:16px; } .authIntro h1 { font-size:24px; } }
+        .authShell {
+          min-height:100vh;
+          width:100%;
+          position:relative;
+          overflow:hidden;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          padding:28px;
+          background:#0b1220;
+          color:#e2e8f0;
+          box-sizing:border-box;
+          font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+
+        .authBackgroundGlow {
+          position:absolute;
+          width:430px;
+          height:430px;
+          border-radius:50%;
+          filter:blur(80px);
+          opacity:.22;
+          pointer-events:none;
+        }
+
+        .authGlowOne {
+          background:#2563eb;
+          top:-180px;
+          left:-130px;
+        }
+
+        .authGlowTwo {
+          background:#06b6d4;
+          right:-170px;
+          bottom:-190px;
+        }
+
+        .authCard {
+          position:relative;
+          z-index:1;
+          width:min(450px,100%);
+          box-sizing:border-box;
+          padding:32px;
+          border:1px solid #26354b;
+          border-radius:20px;
+          background:rgba(17,24,39,.96);
+          box-shadow:0 28px 80px rgba(0,0,0,.38);
+          backdrop-filter:blur(12px);
+        }
+
+        .authBack {
+          display:inline-flex;
+          align-items:center;
+          gap:5px;
+          border:0;
+          background:transparent;
+          color:#64748b;
+          padding:0;
+          margin-bottom:19px;
+          cursor:pointer;
+          font:inherit;
+          font-size:9px;
+          font-weight:700;
+        }
+
+        .authBack:hover {
+          color:#93c5fd;
+        }
+
+        .authBrand {
+          display:flex;
+          align-items:center;
+          gap:11px;
+          margin-bottom:31px;
+        }
+
+        .authBrandIcon {
+          width:42px;
+          height:42px;
+          border-radius:12px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          background:#2563eb;
+          color:#fff;
+          box-shadow:0 8px 24px rgba(37,99,235,.28);
+        }
+
+        .authBrandName {
+          color:#f8fafc;
+          font-size:16px;
+          font-weight:800;
+          letter-spacing:-.3px;
+        }
+
+        .authBrandSub {
+          color:#60a5fa;
+          font-size:9px;
+          font-weight:800;
+          letter-spacing:3px;
+          margin-top:1px;
+        }
+
+        .authIntro span {
+          color:#60a5fa;
+          font-size:9px;
+          font-weight:800;
+          letter-spacing:1.7px;
+        }
+
+        .authIntro h1 {
+          margin:7px 0 6px;
+          color:#f8fafc;
+          font-size:27px;
+          line-height:1.15;
+          letter-spacing:-.6px;
+        }
+
+        .authIntro p {
+          margin:0 0 25px;
+          color:#94a3b8;
+          font-size:11px;
+          line-height:1.6;
+        }
+
+        .authForm {
+          display:flex;
+          flex-direction:column;
+          gap:15px;
+        }
+
+        .authForm label {
+          display:flex;
+          flex-direction:column;
+          gap:7px;
+        }
+
+        .authForm label span {
+          color:#cbd5e1;
+          font-size:10px;
+          font-weight:700;
+        }
+
+        .authInputWrap {
+          position:relative;
+        }
+
+        .authForm input {
+          width:100%;
+          box-sizing:border-box;
+          padding:12px 42px 12px 12px;
+          border:1px solid #334155;
+          border-radius:10px;
+          outline:none;
+          background:#0f172a;
+          color:#f8fafc;
+          font:inherit;
+          font-size:11px;
+          transition:.18s ease;
+        }
+
+        .authForm input:not(.authPasswordInput) {
+          padding-right:12px;
+        }
+
+        .authForm input::placeholder {
+          color:#64748b;
+        }
+
+        .authForm input:focus {
+          border-color:#3b82f6;
+          box-shadow:0 0 0 3px rgba(59,130,246,.13);
+        }
+
+        .authPasswordToggle {
+          position:absolute;
+          top:50%;
+          right:11px;
+          transform:translateY(-50%);
+          width:25px;
+          height:25px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border:0;
+          padding:0;
+          border-radius:6px;
+          background:transparent;
+          color:#64748b;
+          cursor:pointer;
+        }
+
+        .authPasswordToggle:hover {
+          background:#1e293b;
+          color:#cbd5e1;
+        }
+
+        .authPasswordToggle:focus-visible {
+          outline:2px solid #3b82f6;
+          outline-offset:2px;
+        }
+
+        .authPasswordHint {
+          margin-top:-2px;
+          color:#64748b;
+          font-size:9px;
+          line-height:1.45;
+        }
+
+        .authSubmit {
+          width:100%;
+          border:1px solid #2563eb;
+          border-radius:10px;
+          padding:12px 14px;
+          background:#2563eb;
+          color:#fff;
+          cursor:pointer;
+          font:inherit;
+          font-size:11px;
+          font-weight:800;
+          margin-top:2px;
+          transition:.18s ease;
+        }
+
+        .authSubmit:hover:not(:disabled) {
+          background:#1d4ed8;
+          transform:translateY(-1px);
+          box-shadow:0 8px 20px rgba(37,99,235,.22);
+        }
+
+        .authSubmit:disabled {
+          opacity:.65;
+          cursor:wait;
+          transform:none;
+        }
+
+        .authAlert {
+          display:flex;
+          align-items:flex-start;
+          gap:8px;
+          padding:10px 11px;
+          border-radius:10px;
+          font-size:10px;
+          line-height:1.5;
+        }
+
+        .authAlert svg {
+          flex:none;
+          margin-top:1px;
+        }
+
+        .authAlertError {
+          border:1px solid #7f1d1d;
+          background:#2a1518;
+          color:#fca5a5;
+        }
+
+        .authAlertSuccess {
+          border:1px solid #14532d;
+          background:#10251a;
+          color:#86efac;
+        }
+
+        .authSwitch {
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:5px;
+          margin-top:19px;
+          color:#64748b;
+          font-size:10px;
+        }
+
+        .authSwitch button {
+          border:0;
+          padding:0;
+          background:transparent;
+          color:#60a5fa;
+          cursor:pointer;
+          font:inherit;
+          font-weight:700;
+        }
+
+        .authSwitch button:hover {
+          color:#93c5fd;
+        }
+
+        .authForgot {
+          display:flex;
+          justify-content:flex-end;
+          margin-top:-7px;
+        }
+
+        .authForgot button {
+          border:0;
+          padding:0;
+          background:transparent;
+          color:#60a5fa;
+          cursor:pointer;
+          font:inherit;
+          font-size:9px;
+          font-weight:700;
+        }
+
+        .authForgot button:hover {
+          color:#93c5fd;
+        }
+
+        .authConsentBlock {
+          margin-top:-1px;
+        }
+
+        .authConsentLabel {
+          display:flex !important;
+          flex-direction:row !important;
+          align-items:flex-start;
+          gap:9px !important;
+          color:#94a3b8;
+          font-size:9px !important;
+          line-height:1.55;
+        }
+
+        .authConsentLabel input {
+          width:15px !important;
+          height:15px !important;
+          flex:none;
+          margin:1px 0 0;
+          padding:0 !important;
+          accent-color:#2563eb;
+          cursor:pointer;
+          border:0 !important;
+          box-shadow:none !important;
+        }
+
+        .authLegalLink {
+          border:0;
+          padding:0;
+          background:transparent;
+          color:#60a5fa;
+          cursor:pointer;
+          font:inherit;
+          font-weight:700;
+          text-decoration:none;
+        }
+
+        .authLegalLink:hover {
+          color:#93c5fd;
+          text-decoration:underline;
+        }
+
+        .authSecurityNote {
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:6px;
+          margin-top:22px;
+          padding-top:16px;
+          border-top:1px solid #253044;
+          color:#64748b;
+          font-size:9px;
+          text-align:center;
+        }
+
+        .authSecurityNote svg {
+          color:#34d399;
+          flex:none;
+        }
+
+        @media (max-width:520px) {
+          .authShell {
+            padding:14px;
+          }
+
+          .authCard {
+            padding:24px 20px;
+            border-radius:16px;
+          }
+
+          .authIntro h1 {
+            font-size:24px;
+          }
+
+          .authBrand {
+            margin-bottom:25px;
+          }
+        }
       `}</style>
+
       <div className="authShell">
         <div className="authBackgroundGlow authGlowOne" />
         <div className="authBackgroundGlow authGlowTwo" />
+
         <div className="authCard">
           {onBackToLanding && (
-            <button className="authBack" type="button" onClick={onBackToLanding}><ChevronRight size={12} style={{ transform: "rotate(180deg)" }} /> Back to CyberCafe Helper</button>
+            <button
+              className="authBack"
+              type="button"
+              onClick={onBackToLanding}
+            >
+              <ChevronRight
+                size={12}
+                style={{ transform: "rotate(180deg)" }}
+              />
+              Back to CyberCafe Helper
+            </button>
           )}
 
           <div className="authBrand">
-            <div className="authBrandIcon"><Monitor size={24} /></div>
-            <div><div className="authBrandName">CyberCafe</div><div className="authBrandSub">HELPER</div></div>
+            <div className="authBrandIcon">
+              <Monitor size={24} />
+            </div>
+
+            <div>
+              <div className="authBrandName">CyberCafe</div>
+              <div className="authBrandSub">HELPER</div>
+            </div>
           </div>
 
           <div className="authIntro">
-            <span>SECURE WORKSPACE</span>
-            <h1>{mode === "login" ? "Welcome back" : "Create your workspace"}</h1>
-            <p>{mode === "login" ? "Sign in to manage your cyber café operations." : "Create your account to start using CyberCafe Helper."}</p>
+            <span>
+              {mode === "login" ? "SECURE WORKSPACE" : "GET STARTED"}
+            </span>
+
+            <h1>
+              {mode === "login"
+                ? "Welcome back"
+                : "Create your workspace"}
+            </h1>
+
+            <p>
+              {mode === "login"
+                ? "Sign in to manage your cyber café operations."
+                : "Set up your workspace and bring your daily café operations into one place."}
+            </p>
           </div>
 
           <form className="authForm" onSubmit={submit}>
             {mode === "signup" && (
-              <label><span>Business / Cyber Café Name</span><input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Sharma Digital Seva" autoComplete="organization" /></label>
+              <label>
+                <span>Business / Cyber Café Name</span>
+                <input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => {
+                    setBusinessName(e.target.value);
+                    if (fieldErrors.businessName) {
+                      setFieldErrors((current) => ({ ...current, businessName: "" }));
+                    }
+                  }}
+                  placeholder="e.g. Sharma Digital Seva"
+                  autoComplete="organization"
+                  maxLength={100}
+                  aria-invalid={Boolean(fieldErrors.businessName)}
+                  aria-describedby={fieldErrors.businessName ? "business-name-error" : undefined}
+                />
+                {fieldErrors.businessName && (
+                  <div id="business-name-error" className="authFieldError">{fieldErrors.businessName}</div>
+                )}
+              </label>
             )}
-            <label><span>Email Address</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" /></label>
-            <label><span>Password</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
+
+            <label>
+              <span>Email Address</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                maxLength={254}
+                required
+              />
+            </label>
+
+            <label>
+              <span>Password</span>
+
+              <div className="authInputWrap">
+                <input
+                  className="authPasswordInput"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={
+                    mode === "signup"
+                      ? "At least 6 characters"
+                      : "Enter your password"
+                  }
+                  autoComplete={
+                    mode === "login"
+                      ? "current-password"
+                      : "new-password"
+                  }
+                  minLength={6}
+                  maxLength={128}
+                />
+
+                <button
+                  className="authPasswordToggle"
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+
+              {mode === "signup" && (
+                <div className="authPasswordHint">
+                  Use at least 6 characters. A longer password is recommended.
+                </div>
+              )}
+            </label>
 
             {mode === "login" && (
-              <div className="authForgot"><button type="button" onClick={onForgotPassword}>Forgot password?</button></div>
+              <div className="authForgot">
+                <button
+                  type="button"
+                  onClick={onForgotPassword}
+                >
+                  Forgot password?
+                </button>
+              </div>
             )}
 
-            {error && <div className="authAlert authAlertError"><CircleAlert size={16} /><span>{error}</span></div>}
-            {message && <div className="authAlert authAlertSuccess"><CheckCircle2 size={16} /><span>{message}</span></div>}
-            <button className="authSubmit" type="submit" disabled={loading}>{loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}</button>
+            {mode === "signup" && (
+              <div className="authConsentBlock">
+                <label className="authConsentLabel">
+                  <input
+                    type="checkbox"
+                    checked={consentAccepted}
+                    onChange={(e) => {
+                      setConsentAccepted(e.target.checked);
+                      if (fieldErrors.consent) {
+                        setFieldErrors((current) => ({ ...current, consent: "" }));
+                      }
+                    }}
+                    aria-invalid={Boolean(fieldErrors.consent)}
+                    aria-describedby={fieldErrors.consent ? "consent-error" : undefined}
+                  />
+                  <span>
+                    I agree to the <button type="button" onClick={() => window.open("/?legal=terms", "_blank", "noopener,noreferrer")} className="authLegalLink">Terms &amp; Conditions</button> and acknowledge the <button type="button" onClick={() => window.open("/?legal=privacy", "_blank", "noopener,noreferrer")} className="authLegalLink">Privacy Policy</button>.
+                  </span>
+                </label>
+                {fieldErrors.consent && <div id="consent-error" className="authFieldError" style={{ fontSize: "9px", lineHeight: 1.4, marginTop: "5px", fontWeight: 500 }}>{fieldErrors.consent}</div>}
+              </div>
+            )}
+
+            {error && (
+              <div
+                className="authAlert authAlertError"
+                role="alert"
+                aria-live="polite"
+              >
+                <CircleAlert size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {message && (
+              <div
+                className="authAlert authAlertSuccess"
+                role="status"
+                aria-live="polite"
+              >
+                <CheckCircle2 size={16} />
+                <span>{message}</span>
+              </div>
+            )}
+
+            <button
+              className="authSubmit"
+              type="submit"
+              disabled={loading}
+            >
+              {loading
+                ? mode === "login"
+                  ? "Signing in…"
+                  : "Creating workspace…"
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
+            </button>
           </form>
 
           <div className="authSwitch">
-            {mode === "login" ? "Don't have an account?" : "Already have an account?"}
-            <button type="button" onClick={() => switchMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Create one" : "Sign in"}</button>
+            {mode === "login"
+              ? "Don't have an account?"
+              : "Already have an account?"}
+
+            <button
+              type="button"
+              onClick={() =>
+                switchMode(mode === "login" ? "signup" : "login")
+              }
+            >
+              {mode === "login" ? "Create one" : "Sign in"}
+            </button>
           </div>
 
-          <div className="authSecurityNote"><ShieldCheck size={15} /><span>Your account is secured by Supabase Authentication.</span></div>
+          <div className="authSecurityNote">
+            <ShieldCheck size={15} />
+            <span>
+              Your account and workspace access are protected with secure authentication.
+            </span>
+          </div>
         </div>
       </div>
     </>
@@ -1978,7 +2773,7 @@ function ForgotPasswordScreen({ onBackToLogin, onBackToLanding }) {
       if (resetError) throw resetError;
       setMessage("If an account exists for this email, a password reset link has been sent. Please check your inbox.");
     } catch (err) {
-      setError(err?.message || "Could not send the reset link. Please try again.");
+      setError(getSafeUiError(err, "Could not send the reset link. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -2001,6 +2796,9 @@ function ForgotPasswordScreen({ onBackToLogin, onBackToLanding }) {
         .authForm input { width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #334155; border-radius:10px; outline:none; background:#0f172a; color:#f8fafc; font:inherit; font-size:11px; transition:.18s ease; }
         .authForm input::placeholder { color:#64748b; }
         .authForm input:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.13); }
+        .authForm input[aria-invalid="true"] { border:2px solid #ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.18) !important; }
+        .authFieldError { color:#dc2626; font-size:9px !important; line-height:1.4; margin-top:-2px; }
+        .authConsentBlock > .authFieldError { display:block !important; color:#dc2626 !important; font-size:9px !important; line-height:1.4 !important; font-weight:500 !important; margin:5px 0 0 !important; padding:0 !important; }
         .authSubmit { width:100%; border:1px solid #2563eb; border-radius:10px; padding:11px 14px; background:#2563eb; color:#fff; cursor:pointer; font:inherit; font-size:11px; font-weight:800; margin-top:2px; transition:.18s ease; }
         .authSubmit:hover:not(:disabled) { background:#1d4ed8; transform:translateY(-1px); box-shadow:0 8px 20px rgba(37,99,235,.22); }
         .authSubmit:disabled { opacity:.65; cursor:wait; }
@@ -2064,7 +2862,7 @@ function ResetPasswordScreen({ onComplete }) {
       setConfirmPassword("");
       setTimeout(onComplete, 1200);
     } catch (err) {
-      setError(err?.message || "Could not update your password. Please request a new reset link.");
+      setError(getSafeUiError(err, "Could not update your password. Please request a new reset link."));
     } finally {
       setLoading(false);
     }
@@ -2188,11 +2986,17 @@ function CafeQRPage({ workspace, businessProfile }) {
   };
 
   const printQr = () => {
-    const printWindow = window.open("", "_blank", "width=700,height=800");
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=700,height=800");
     if (!printWindow) return;
 
-    const qrMarkup = document.querySelector("#cafe-qr-code")?.innerHTML || "";
-    const businessName = businessProfile?.businessName || workspace?.name || "CyberCafe Helper";
+    const qrSvg = document.querySelector("#cafe-qr-code svg");
+    if (!qrSvg) {
+      printWindow.close();
+      return;
+    }
+    const qrMarkup = qrSvg.outerHTML;
+    const businessName = escapeHtml(businessProfile?.businessName || workspace?.name || "CyberCafe Helper");
+    const safeQrUrl = escapeHtml(qrUrl);
 
     printWindow.document.write(`
       <!doctype html>
@@ -2234,7 +3038,7 @@ function CafeQRPage({ workspace, businessProfile }) {
             <p>Scan this QR code to open our CyberCafe Helper customer portal.</p>
             <div class="qr">${qrMarkup}</div>
             <div class="scan">Scan to continue</div>
-            <div class="url">${qrUrl}</div>
+            <div class="url">${safeQrUrl}</div>
           </div>
           <script>
             window.onload = function () {
@@ -2248,22 +3052,46 @@ function CafeQRPage({ workspace, businessProfile }) {
   };
 
   return (
-    <div>
+    <div className="cafeQrPage">
+      <style>{`
+        .cafeQrGrid { display:grid; grid-template-columns:minmax(300px,430px) minmax(0,1fr); gap:20px; align-items:start; }
+        .cafeQrCodeWrap { display:inline-flex; padding:18px; }
+        .cafeQrCodeWrap svg { display:block; width:280px; height:280px; max-width:100%; }
+        .cafeQrActions { display:flex; justify-content:center; gap:10px; margin-top:20px; flex-wrap:wrap; }
+        .cafeQrHowItem { display:flex; gap:13px; padding:15px; }
+        @media (max-width:700px) {
+          .cafeQrPage { width:100%; overflow-x:hidden; }
+          .cafeQrPage .pageHeading { margin-bottom:14px; }
+          .cafeQrGrid { grid-template-columns:1fr; gap:14px; }
+          .cafeQrCard { padding:18px !important; }
+          .cafeQrCodeWrap { padding:12px; border-radius:15px !important; max-width:100%; }
+          .cafeQrCodeWrap svg { width:min(280px,72vw); height:min(280px,72vw); }
+          .cafeQrActions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; }
+          .cafeQrActions button { width:100%; min-height:42px; justify-content:center; padding:9px 10px !important; }
+          .cafeQrActions button:last-child { grid-column:1 / -1; }
+          .cafeQrHowItem { padding:12px; gap:10px; }
+          .cafeQrHowItem strong { font-size:12px !important; }
+          .cafeQrHowItem span { font-size:10px !important; }
+        }
+        @media (max-width:380px) {
+          .cafeQrCard { padding:14px !important; }
+          .cafeQrCodeWrap { padding:9px; }
+          .cafeQrCodeWrap svg { width:68vw; height:68vw; }
+          .cafeQrActions { grid-template-columns:1fr; }
+          .cafeQrActions button:last-child { grid-column:auto; }
+        }
+      `}</style>
       <PageHeading
         eyebrow="CUSTOMER ACCESS"
         title="My Café QR"
         subtitle="Give customers a simple way to open your café's CyberCafe Helper portal."
       />
 
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(300px, 430px) 1fr",
-        gap: 20,
-        alignItems: "start"
-      }}>
-        <section className="dashboardCard" style={{ padding: 28, textAlign: "center" }}>
+      <div className="cafeQrGrid" style={{ margin: 0 }}>
+        <section className="dashboardCard cafeQrCard" style={{ padding: 28, textAlign: "center" }}>
           <div
             id="cafe-qr-code"
+            className="cafeQrCodeWrap"
             style={{
               display: "inline-flex",
               padding: 18,
@@ -2295,7 +3123,7 @@ function CafeQRPage({ workspace, businessProfile }) {
             Customers can scan this code with their phone camera.
           </p>
 
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+          <div className="cafeQrActions">
             <button className="secondaryButton" onClick={downloadQr} disabled={!workspaceId}>
               <Download size={16} />
               Download QR
@@ -2325,7 +3153,7 @@ function CafeQRPage({ workspace, businessProfile }) {
           </div>
         </section>
 
-        <section className="dashboardCard" style={{ padding: 24 }}>
+        <section className="dashboardCard cafeQrCard" style={{ padding: 24 }}>
           <span className="sectionEyebrow">HOW IT WORKS</span>
           <h2 style={{ margin: "7px 0 16px", fontSize: 20 }}>One QR for your café</h2>
 
@@ -2475,7 +3303,7 @@ function PrintJobsPage({ workspace }) {
       setJobs(jobRows.map((job) => ({ ...job, files: filesByJob[job.id] || [] })));
     } catch (err) {
       console.error("Print jobs load failed:", err);
-      setError(err?.message || "Could not load print jobs.");
+      setError(getSafeUiError(err, "Could not load print jobs."));
     } finally {
       setLoading(false);
     }
@@ -2573,7 +3401,7 @@ function PrintJobsPage({ workspace }) {
       await loadJobs();
     } catch (err) {
       console.error("Print job status update failed:", err);
-      setError(err?.message || "Could not update print job.");
+      setError(getSafeUiError(err, "Could not update print job."));
     } finally {
       setBusyId("");
     }
@@ -2624,7 +3452,7 @@ function PrintJobsPage({ workspace }) {
       await loadJobs();
     } catch (err) {
       console.error("Print job completion failed:", err);
-      setError(err?.message || "Could not complete print job.");
+      setError(getSafeUiError(err, "Could not complete print job."));
     } finally {
       setBusyId("");
     }
@@ -2647,7 +3475,7 @@ function PrintJobsPage({ workspace }) {
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
       console.error("Print file download failed:", err);
-      setError(err?.message || "Could not open the file.");
+      setError(getSafeUiError(err, "Could not open the file."));
     } finally {
       setBusyId("");
     }
@@ -3000,7 +3828,7 @@ function PrintJobsPage({ workspace }) {
                       </span>
                     </div>
                     <div style={{ marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap", color: "#64748b", fontSize: 11 }}>
-                      {job.customer_phone ? <a href={`tel:${job.customer_phone}`} style={{ color: "#475569", textDecoration: "none" }}>☎ {job.customer_phone}</a> : <span>No phone</span>}
+                      {job.customer_phone ? <a href={getSafePhoneUrl(job.customer_phone)} style={{ color: "#475569", textDecoration: "none" }}>☎ {job.customer_phone}</a> : <span>No phone</span>}
                       <span>•</span><span title={`Submitted ${formatExactTime(job.created_at)}`}>{formatTime(job.created_at)}</span>
                     </div>
                   </div>
@@ -3344,7 +4172,29 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
       files.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
     );
 
-    const newFiles = selected.filter(
+    const allowedExtensions = ["pdf", "jpg", "jpeg", "png", "doc", "docx"];
+    const maxFileBytes = 10 * 1024 * 1024;
+    const validFiles = [];
+    const rejectedFiles = [];
+
+    selected.forEach((file) => {
+      const extension = String(file.name || "").split(".").pop()?.toLowerCase() || "";
+      if (!allowedExtensions.includes(extension)) {
+        rejectedFiles.push(`${file.name}: unsupported format`);
+        return;
+      }
+      if (file.size > maxFileBytes) {
+        rejectedFiles.push(`${file.name}: over 10 MB`);
+        return;
+      }
+      validFiles.push(file);
+    });
+
+    if (rejectedFiles.length) {
+      setError(`Some files were not added. ${rejectedFiles.slice(0, 2).join("; ")}${rejectedFiles.length > 2 ? "; and more." : "."}`);
+    }
+
+    const newFiles = validFiles.filter(
       (file) =>
         !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
     );
@@ -3405,7 +4255,7 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
       setNotes("");
     } catch (err) {
       console.error("Print job submission failed:", err);
-      setError(err?.message || "Could not submit the print request.");
+      setError(getSafeUiError(err, "Could not submit the print request."));
     } finally {
       setSubmitting(false);
     }
@@ -3433,7 +4283,7 @@ function QRCustomerLanding({ workspaceId, onSignIn, onSignUp }) {
         <div className="dashboardCard qrSuccessCard" style={{ width: "100%", maxWidth: 520, padding: 30 }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 60, height: 60, margin: "0 auto 16px", borderRadius: 18, display: "grid", placeItems: "center", background: statusMeta.bg, color: statusMeta.color }}><PrinterIcon size={30} /></div>
-            <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>PRINT REQUEST</span>
+            <span style={{ color: "#2563eb", fontSize: 10, fontWeight: 850, letterSpacing: 1.4 }}>THANK YOU · PRINT REQUEST RECEIVED</span>
             <h1 className="qrSuccessTitle" style={{ margin: "8px 0 6px", fontSize: 26 }}>{workspaceInfo?.name || "Café"}</h1>
             <p style={{ margin: "0 auto", color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>Track your request here. This page checks for status updates automatically.</p>
           </div>
@@ -3935,32 +4785,20 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState(() => { const saved = localStorage.getItem("cc_theme"); return saved === "dark" ? "dark" : "light"; });
 
-  const [tasks, setTasks] = useState(() => {
-    const saved = localStorage.getItem("cc_tasks");
+  // Remove legacy browser copies of workspace/customer data. Auth/session state remains
+  // managed by Supabase Auth; only non-sensitive UI preferences and the public print
+  // tracking ID are allowed to remain in localStorage.
+  useEffect(() => {
+    ["cc_tasks", "cc_links", "cc_service_templates", "cc_business_profile"].forEach((key) => {
+      try { localStorage.removeItem(key); } catch {}
+    });
+  }, []);
 
-    if (!saved) return defaultTasks.map(normalizeTask);
+  // Customer records are loaded from Supabase only. Never persist customer PII in browser storage.
+  const [tasks, setTasks] = useState([])
 
-    try {
-      const parsed = JSON.parse(saved);
-
-      return Array.isArray(parsed) ? parsed.map(normalizeTask) : defaultTasks.map(normalizeTask);
-    } catch {
-      return defaultTasks.map(normalizeTask);
-    }
-  });
-
-  const [links, setLinks] = useState(() => {
-    const saved = localStorage.getItem("cc_links");
-
-    if (!saved) return [];
-
-    try {
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  // Quick links are workspace data; keep them in Supabase rather than localStorage.
+  const [links, setLinks] = useState([])
 
   const [modal, setModal] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -3970,7 +4808,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   const [aiCustomer, setAiCustomer] = useState(null);
   const [customerAccessCustomer, setCustomerAccessCustomer] = useState(null);
 
-  const [serviceTemplates, setServiceTemplates] = useState(() => getStoredServiceTemplates());
+  const [serviceTemplates, setServiceTemplates] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [subscription, setSubscription] = useState(null);
@@ -3992,37 +4830,27 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
     });
   }, [workspace?.id, isOwnerOrAdmin]);
 
-  const [businessProfile, setBusinessProfile] = useState(() => {
-    const saved = localStorage.getItem("cc_business_profile");
-    const defaults = {
-      businessName: "CyberCafe Helper",
-      ownerName: "",
-      phone: "",
-      address: "",
-      gstin: "",
-      receiptFooter: "Thank you for using our services."
-    };
+  const [businessProfile, setBusinessProfile] = useState(() => ({
+    businessName: workspace?.name || user?.user_metadata?.business_name || "CyberCafe Helper",
+    ownerName: user?.user_metadata?.owner_name || "",
+    phone: workspace?.phone || "",
+    address: workspace?.address || "",
+    gstin: workspace?.gstin || "",
+    receiptFooter: user?.user_metadata?.receipt_footer || "Thank you for using our services."
+  }));
 
-    if (!saved) return defaults;
-
-    try {
-      return {
-        ...defaults,
-        ...JSON.parse(saved)
-      };
-    } catch {
-      return defaults;
-    }
-  });
-
-  // Keep a local safety copy while the database migration is in progress.
-  // Supabase is now the source of truth for customer CRUD.
   useEffect(() => {
-    localStorage.setItem(
-      "cc_tasks",
-      JSON.stringify(tasks)
-    );
-  }, [tasks]);
+    if (!workspace && !user) return;
+    setBusinessProfile((prev) => ({
+      ...prev,
+      businessName: workspace?.name || user?.user_metadata?.business_name || prev.businessName || "CyberCafe Helper",
+      phone: workspace?.phone ?? prev.phone,
+      address: workspace?.address ?? prev.address,
+      gstin: workspace?.gstin ?? prev.gstin,
+      ownerName: user?.user_metadata?.owner_name ?? prev.ownerName,
+      receiptFooter: user?.user_metadata?.receipt_footer ?? prev.receiptFooter
+    }));
+  }, [workspace?.id, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4083,7 +4911,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       } catch (error) {
         console.error("Failed to load customers from Supabase:", error);
         if (!cancelled) {
-          alert(`Could not load customers from Supabase.\n\n${error?.message || "Unknown database error"}`);
+          alert(`Could not load customers from Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
         }
       }
     };
@@ -4096,10 +4924,6 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   }, [workspace?.id]);
 
   useEffect(() => {
-    localStorage.setItem("cc_links", JSON.stringify(links));
-  }, [links]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const loadQuickLinks = async () => {
@@ -4107,35 +4931,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
 
       try {
         const remoteLinks = await getQuickLinksFromSupabase(workspace.id);
-        const localLinks = (() => {
-          try {
-            const saved = localStorage.getItem("cc_links");
-            const parsed = saved ? JSON.parse(saved) : [];
-            return Array.isArray(parsed) ? parsed : [];
-          } catch {
-            return [];
-          }
-        })();
-
-        if (remoteLinks.length) {
-          if (!cancelled) setLinks(remoteLinks);
-          return;
-        }
-
-        // One-time migration of links created before the Supabase migration.
-        if (localLinks.length) {
-          const migrated = [];
-          for (const link of localLinks) {
-            try {
-              migrated.push(await createQuickLinkInSupabase(link, workspace.id));
-            } catch (migrationError) {
-              console.warn("Could not migrate local quick link:", migrationError);
-            }
-          }
-          if (!cancelled) setLinks(migrated.length ? migrated : localLinks);
-        } else if (!cancelled) {
-          setLinks([]);
-        }
+        if (!cancelled) setLinks(remoteLinks);
       } catch (error) {
         console.error("Failed to load quick links from Supabase:", error);
         // Keep the local copy as a safe fallback during migration.
@@ -4221,17 +5017,6 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
   }, [workspace?.id, isOwnerOrAdmin]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "cc_business_profile",
-      JSON.stringify(businessProfile)
-    );
-  }, [businessProfile]);
-
-  useEffect(() => {
-    localStorage.setItem("cc_service_templates", JSON.stringify(serviceTemplates));
-  }, [serviceTemplates]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const loadServiceTemplates = async () => {
@@ -4239,30 +5024,9 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
 
       try {
         const remoteServices = await getServiceTemplatesFromSupabase(workspace.id);
-        const localServices = getStoredServiceTemplates();
-
-        if (remoteServices.length) {
-          if (!cancelled) setServiceTemplates(remoteServices);
-          return;
-        }
-
-        // One-time migration of any services created before Supabase migration.
-        if (localServices.length) {
-          const migrated = [];
-          for (const service of localServices) {
-            try {
-              migrated.push(await createServiceTemplateInSupabase(service, workspace.id));
-            } catch (migrationError) {
-              console.warn("Could not migrate local service template:", migrationError);
-            }
-          }
-          if (!cancelled) setServiceTemplates(migrated.length ? migrated : localServices);
-        } else if (!cancelled) {
-          setServiceTemplates([]);
-        }
+        if (!cancelled) setServiceTemplates(remoteServices);
       } catch (error) {
         console.error("Failed to load service templates from Supabase:", error);
-        // Keep the existing local copy as a safe fallback during migration.
       }
     };
 
@@ -4517,7 +5281,6 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
           color: "#2563eb"
         },
         handler: async (response) => {
-          console.log("Razorpay one-time payment response:", response);
           finish(resolve, response);
         },
         modal: {
@@ -4574,7 +5337,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       setTeamMembers(members);
     } catch (error) {
       console.error("Failed to refresh team members:", error);
-      alert(`Could not load team members.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not load team members.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     } finally {
       setTeamLoading(false);
     }
@@ -4592,7 +5355,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       return true;
     } catch (error) {
       console.error("Failed to add team member:", error);
-      alert(`Could not add team member.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not add team member.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
       return false;
     }
   };
@@ -4609,7 +5372,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       await refreshWorkspaceBilling();
     } catch (error) {
       console.error("Failed to update team member role:", error);
-      alert(`Could not update team member role.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not update team member role.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4626,7 +5389,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       await refreshWorkspaceBilling();
     } catch (error) {
       console.error("Failed to remove team member:", error);
-      alert(`Could not remove team member.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not remove team member.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4651,7 +5414,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       return true;
     } catch (error) {
       console.error("Failed to save service template:", error);
-      alert(`Could not save service template to Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not save service template to Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
       return false;
     }
   };
@@ -4669,7 +5432,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       await refreshWorkspaceBilling();
     } catch (error) {
       console.error("Failed to delete service template:", error);
-      alert(`Could not delete service template from Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not delete service template from Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4796,7 +5559,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       setModal(null);
     } catch (error) {
       console.error("Failed to create customer:", error);
-      alert(`Could not save customer to Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not save customer to Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4828,7 +5591,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       setModal(null);
     } catch (error) {
       console.error("Failed to create quick link:", error);
-      alert(`Could not save quick link to Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not save quick link to Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4846,7 +5609,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       await refreshWorkspaceBilling();
     } catch (error) {
       console.error("Failed to delete quick link:", error);
-      alert(`Could not delete quick link from Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not delete quick link from Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -4927,7 +5690,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       return true;
     } catch (error) {
       console.error("Failed to update customer/follow-up:", error);
-      alert(`Could not save changes to Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not save changes to Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
       return false;
     }
   };
@@ -4981,7 +5744,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       setPaymentCustomer(null);
     } catch (error) {
       console.error("Failed to save payment:", error);
-      alert(`Could not save payment to Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not save payment to Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -5021,7 +5784,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       setSelectedCustomer((current) => current?.id === customerId ? updatedTask : current);
     } catch (error) {
       console.error("Failed to delete payment:", error);
-      alert(`Could not delete payment from Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not delete payment from Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -5047,7 +5810,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       await refreshWorkspaceBilling();
     } catch (error) {
       console.error("Failed to delete customer:", error);
-      alert(`Could not delete customer from Supabase.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not delete customer from Supabase.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -5072,6 +5835,37 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       .maybeSingle();
     if (error) throw error;
     return data || null;
+  };
+
+  const saveBusinessProfile = async (profile) => {
+    const cleaned = {
+      businessName: String(profile?.businessName || workspace?.name || "CyberCafe Helper").trim(),
+      ownerName: String(profile?.ownerName || "").trim(),
+      phone: String(profile?.phone || "").trim(),
+      address: String(profile?.address || "").trim(),
+      gstin: String(profile?.gstin || "").trim().toUpperCase(),
+      receiptFooter: String(profile?.receiptFooter || "Thank you for using our services.").trim()
+    };
+
+    if (!workspace?.id) throw new Error("Workspace is not available.");
+
+    const { error: workspaceError } = await supabase
+      .from("workspaces")
+      .update({
+        name: cleaned.businessName,
+        phone: cleaned.phone || null,
+        address: cleaned.address || null,
+        gstin: cleaned.gstin || null
+      })
+      .eq("id", workspace.id);
+    if (workspaceError) throw workspaceError;
+
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: { owner_name: cleaned.ownerName, receipt_footer: cleaned.receiptFooter }
+    });
+    if (metadataError) throw metadataError;
+
+    setBusinessProfile(cleaned);
   };
 
   const exportBackup = async () => {
@@ -5130,41 +5924,74 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       alert("Supabase workspace backup exported successfully.");
     } catch (error) {
       console.error("Failed to export Supabase backup:", error);
-      alert(`Could not export workspace backup.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not export workspace backup.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
   const importBackup = (file) => {
     if (!file) return;
+    const MAX_BACKUP_SIZE = 25 * 1024 * 1024;
+    const MAX_RECORDS_PER_COLLECTION = 5000;
+
+    if (file.size > MAX_BACKUP_SIZE) {
+      alert("Backup file is too large. Please select a file smaller than 25 MB.");
+      return;
+    }
+    if (file.type && file.type !== "application/json" && !file.name.toLowerCase().endsWith(".json")) {
+      alert("Please select a valid CyberCafe Helper JSON backup file.");
+      return;
+    }
     if (!workspace?.id) {
       alert("Your workspace is still loading. Please try again in a moment.");
       return;
     }
 
+    const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    const asArray = (value) => Array.isArray(value) ? value : [];
+    const isSafeDate = (value) => {
+      if (!value) return true;
+      const parsed = new Date(value);
+      return !Number.isNaN(parsed.getTime());
+    };
+    const isValidUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const data = JSON.parse(event.target.result);
-        if (!data || data.app !== "CyberCafe Helper") {
+        const data = JSON.parse(String(event.target?.result || ""));
+        if (!isPlainObject(data) || data.app !== "CyberCafe Helper" || ![1, 2].includes(Number(data.backupVersion || data.version || 1))) {
           throw new Error("Invalid CyberCafe Helper backup.");
+        }
+
+        const backupWorkspaceId = String(data.workspace?.id || "").trim();
+        if (backupWorkspaceId && (!isValidUuid(backupWorkspaceId) || backupWorkspaceId !== workspace.id)) {
+          throw new Error("This backup belongs to a different workspace.");
         }
 
         const customers = Array.isArray(data.customers)
           ? data.customers
           : Array.isArray(data.tasks)
-            ? data.tasks.map((task) => normalizeCustomerForDatabase(task, workspace.id))
+            ? data.tasks
             : [];
-        const payments = Array.isArray(data.payments) ? data.payments : [];
-        const followUps = Array.isArray(data.followUps) ? data.followUps : [];
-        const serviceTemplates = Array.isArray(data.serviceTemplates) ? data.serviceTemplates : [];
+        const payments = asArray(data.payments);
+        const followUps = asArray(data.followUps);
+        const serviceTemplates = asArray(data.serviceTemplates);
         const quickLinks = Array.isArray(data.quickLinks)
           ? data.quickLinks
           : Array.isArray(data.links)
             ? data.links
             : [];
 
-        const totalRecords = customers.length + payments.length + followUps.length + serviceTemplates.length + quickLinks.length;
-        if (!totalRecords && !data.settings?.businessProfile) {
+        const collections = [customers, payments, followUps, serviceTemplates, quickLinks];
+        if (collections.some((items) => items.length > MAX_RECORDS_PER_COLLECTION)) {
+          throw new Error(`Backup exceeds the maximum of ${MAX_RECORDS_PER_COLLECTION.toLocaleString("en-IN")} records per collection.`);
+        }
+        if (collections.some((items) => items.some((item) => !isPlainObject(item)))) {
+          throw new Error("Backup contains an invalid record structure.");
+        }
+
+        const totalRecords = collections.reduce((sum, items) => sum + items.length, 0);
+        if (!totalRecords && !isPlainObject(data.settings?.businessProfile)) {
           throw new Error("This backup does not contain any restorable workspace data.");
         }
 
@@ -5173,127 +6000,130 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
         );
         if (!confirmed) return;
 
-        // Restore customers first because payments and follow-ups reference customer IDs.
+        // Never trust imported database IDs. Generate fresh IDs locally, keep a deterministic
+        // old-ID -> new-ID map, and reject duplicate old IDs so relationships stay unambiguous.
+        const customerIdMap = new Map();
         if (customers.length) {
           const customerRows = customers.map((customer) => {
-            const row = customer.id
-              ? normalizeCustomerForDatabase({ ...customer, id: customer.id }, workspace.id)
-              : normalizeCustomerForDatabase(customer, workspace.id);
-            return row;
+            const oldId = String(customer.id || "").trim();
+            if (oldId) {
+              if (!isValidUuid(oldId)) throw new Error("Backup contains an invalid customer ID.");
+              if (customerIdMap.has(oldId)) throw new Error("Backup contains duplicate customer IDs.");
+            }
+
+            const newId = crypto.randomUUID();
+            if (oldId) customerIdMap.set(oldId, newId);
+
+            const row = normalizeCustomerForDatabase(customer, workspace.id);
+            return { ...row, id: newId, workspace_id: workspace.id };
           });
 
           const { error } = await supabase
             .from("customers")
-            .upsert(customerRows, { onConflict: "id" });
+            .insert(customerRows);
           if (error) throw error;
         }
 
         if (payments.length) {
           const paymentRows = payments
-            .filter((payment) => payment.customer_id || payment.customerId)
-            .map((payment) => ({
-              ...(payment.id ? { id: payment.id } : {}),
-              workspace_id: workspace.id,
-              customer_id: payment.customer_id || payment.customerId,
-              amount: Number(payment.amount || 0),
-              method: payment.method || "Other",
-              note: payment.note || null,
-              payment_date: payment.payment_date || payment.date || new Date().toISOString().slice(0, 10)
-            }));
+            .map((payment) => {
+              const oldCustomerId = String(payment.customer_id || payment.customerId || "").trim();
+              const customerId = customerIdMap.get(oldCustomerId);
+              if (!customerId) return null;
+              const amount = Number(payment.amount || 0);
+              if (!Number.isFinite(amount) || amount <= 0) return null;
+              return {
+                workspace_id: workspace.id,
+                customer_id: customerId,
+                amount,
+                method: String(payment.method || "Other").slice(0, 50),
+                note: payment.note ? String(payment.note).slice(0, 2000) : null,
+                payment_date: isSafeDate(payment.payment_date || payment.date) ? (payment.payment_date || payment.date || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10)
+              };
+            })
+            .filter(Boolean);
 
           if (paymentRows.length) {
-            const { error } = await supabase
-              .from("payments")
-              .upsert(paymentRows, { onConflict: "id" });
+            const { error } = await supabase.from("payments").insert(paymentRows);
             if (error) throw error;
           }
         }
 
         if (followUps.length) {
           const followUpRows = followUps
-            .filter((followUp) => followUp.customer_id || followUp.customerId)
             .map((followUp) => {
+              const oldCustomerId = String(followUp.customer_id || followUp.customerId || "").trim();
+              const customerId = customerIdMap.get(oldCustomerId);
+              if (!customerId) return null;
               let dueAt = followUp.due_at || followUp.dueAt || null;
               if (!dueAt && followUp.date) {
                 dueAt = `${followUp.date}${followUp.time ? `T${followUp.time}` : "T00:00:00"}`;
               }
-
+              if (!isSafeDate(dueAt)) dueAt = new Date().toISOString();
               return {
-                ...(followUp.id ? { id: followUp.id } : {}),
                 workspace_id: workspace.id,
-                customer_id: followUp.customer_id || followUp.customerId,
-                title: String(followUp.title || "Follow-up").trim(),
-                type: followUp.type || "Follow-up",
+                customer_id: customerId,
+                title: String(followUp.title || "Follow-up").trim().slice(0, 200),
+                type: String(followUp.type || "Follow-up").slice(0, 50),
                 due_at: dueAt || new Date().toISOString(),
-                note: followUp.note || null,
+                note: followUp.note ? String(followUp.note).slice(0, 2000) : null,
                 completed: Boolean(followUp.completed)
               };
-            });
+            })
+            .filter(Boolean);
 
           if (followUpRows.length) {
-            const { error } = await supabase
-              .from("follow_ups")
-              .upsert(followUpRows, { onConflict: "id" });
+            const { error } = await supabase.from("follow_ups").insert(followUpRows);
             if (error) throw error;
           }
         }
 
         if (serviceTemplates.length) {
           const serviceRows = serviceTemplates.map((service) => ({
-            ...(service.id ? { id: service.id } : {}),
             workspace_id: workspace.id,
-            name: String(service.name || "").trim(),
-            price: Number(service.price || 0),
-            completion_days: Number(service.completion_days ?? service.completionDays ?? 0),
-            required_documents: service.required_documents ?? service.requiredDocuments ?? [],
-            workflow_stages: service.workflow_stages ?? service.workflowStages ?? ["New", "Processing", "Ready", "Completed"],
-            tracking_label: service.tracking_label ?? service.trackingLabel ?? "Application / Reference No."
+            name: String(service.name || "").trim().slice(0, 200),
+            price: Number.isFinite(Number(service.price)) ? Math.max(0, Number(service.price)) : 0,
+            completion_days: Number.isFinite(Number(service.completion_days ?? service.completionDays)) ? Math.max(0, Number(service.completion_days ?? service.completionDays)) : 0,
+            required_documents: Array.isArray(service.required_documents ?? service.requiredDocuments) ? (service.required_documents ?? service.requiredDocuments).filter((item) => typeof item === "string").slice(0, 50) : [],
+            workflow_stages: Array.isArray(service.workflow_stages ?? service.workflowStages) ? (service.workflow_stages ?? service.workflowStages).filter((item) => typeof item === "string").slice(0, 50) : ["New", "Processing", "Ready", "Completed"],
+            tracking_label: String(service.tracking_label ?? service.trackingLabel ?? "Application / Reference No.").trim().slice(0, 200)
           })).filter((service) => service.name);
 
           if (serviceRows.length) {
-            const { error } = await supabase
-              .from("service_templates")
-              .upsert(serviceRows, { onConflict: "id" });
+            const { error } = await supabase.from("service_templates").insert(serviceRows);
             if (error) throw error;
           }
         }
 
         if (quickLinks.length) {
           const quickLinkRows = quickLinks.map((link) => ({
-            ...(link.id ? { id: link.id } : {}),
             workspace_id: workspace.id,
-            name: String(link.name || link.title || "").trim(),
-            title: String(link.title || link.name || "").trim(),
-            url: String(link.url || "").trim()
+            name: String(link.name || link.title || "").trim().slice(0, 200),
+            url: getSafeExternalUrl(link.url)
           })).filter((link) => link.name && link.url);
 
           if (quickLinkRows.length) {
-            const { error } = await supabase
-              .from("quick_links")
-              .upsert(quickLinkRows, { onConflict: "id" });
+            const { error } = await supabase.from("quick_links").insert(quickLinkRows);
             if (error) throw error;
           }
         }
 
-        if (data.workspace && workspace?.id) {
+        if (isPlainObject(data.workspace) && workspace?.id) {
           const workspaceUpdate = {};
-          if (data.workspace.phone !== undefined) workspaceUpdate.phone = data.workspace.phone || null;
-          if (data.workspace.address !== undefined) workspaceUpdate.address = data.workspace.address || null;
-          if (data.workspace.gstin !== undefined) workspaceUpdate.gstin = data.workspace.gstin || null;
-          if (data.workspace.name !== undefined) workspaceUpdate.name = data.workspace.name || workspace.name;
+          if (data.workspace.phone !== undefined) workspaceUpdate.phone = String(data.workspace.phone || "").slice(0, 50) || null;
+          if (data.workspace.address !== undefined) workspaceUpdate.address = String(data.workspace.address || "").slice(0, 500) || null;
+          if (data.workspace.gstin !== undefined) workspaceUpdate.gstin = String(data.workspace.gstin || "").slice(0, 50) || null;
+          if (data.workspace.name !== undefined) workspaceUpdate.name = String(data.workspace.name || workspace.name).slice(0, 100) || workspace.name;
 
           if (Object.keys(workspaceUpdate).length) {
-            const { error } = await supabase
-              .from("workspaces")
-              .update(workspaceUpdate)
-              .eq("id", workspace.id);
+            const { error } = await supabase.from("workspaces").update(workspaceUpdate).eq("id", workspace.id);
             if (error) throw error;
           }
         }
 
-        if (data.settings?.businessProfile && typeof data.settings.businessProfile === "object") {
+        if (isPlainObject(data.settings?.businessProfile)) {
           setBusinessProfile((prev) => ({ ...prev, ...data.settings.businessProfile }));
-        } else if (data.businessProfile && typeof data.businessProfile === "object") {
+        } else if (isPlainObject(data.businessProfile)) {
           setBusinessProfile((prev) => ({ ...prev, ...data.businessProfile }));
         }
 
@@ -5301,7 +6131,6 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
           setTheme(data.settings?.theme || data.theme);
         }
 
-        // Reload the real Supabase state after restore.
         const restoredCustomers = await getCustomersFromSupabase(workspace.id);
         const customerIds = restoredCustomers.map((customer) => customer.id);
         const restoredPayments = await getPaymentsFromSupabase(workspace.id, customerIds);
@@ -5342,7 +6171,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
         alert("Supabase workspace backup restored successfully.");
       } catch (error) {
         console.error("Failed to import Supabase backup:", error);
-        alert(`Could not restore workspace backup.\n\n${error?.message || "Unknown database error"}`);
+        alert(`Could not restore workspace backup.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
       }
     };
     reader.readAsText(file);
@@ -5394,7 +6223,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
       alert("Workspace data reset successfully.");
     } catch (error) {
       console.error("Failed to reset Supabase workspace:", error);
-      alert(`Could not reset workspace data.\n\n${error?.message || "Unknown database error"}`);
+      alert(`Could not reset workspace data.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
     }
   };
 
@@ -5812,7 +6641,46 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
         .theme-emerald .dashboardQuickLink > div:first-child, .theme-emerald .officialQuickItem > div:first-child { background:#ecfdf5; color:#059669; }
         .theme-emerald input:focus, .theme-emerald select:focus, .theme-emerald textarea:focus { border-color:#34d399 !important; box-shadow:0 0 0 3px rgba(16,185,129,.10); }
         .theme-dark { color:#e2e8f0; }\n        .theme-dark .mainArea, .theme-dark .content { background:#0f172a; }\n        .theme-dark .topbar { background:#111827; border-color:#253044; }\n        .theme-dark .searchBox { background:#182234; border-color:#334155; color:#94a3b8; }\n        .theme-dark .searchBox input { color:#e2e8f0; }\n        .theme-dark .globalSearchPanel, .theme-dark .dashboardCard, .theme-dark .opsCard, .theme-dark .statsCard, .theme-dark .serviceCard, .theme-dark .managedServiceCard, .theme-dark .calculatorCard, .theme-dark .quickLinkForm, .theme-dark .savedLinks, .theme-dark .settingsPanel, .theme-dark .settingsOptionCard, .theme-dark .dashboardQuickLink, .theme-dark .officialQuickItem, .theme-dark .followUpPageItem, .theme-dark .followUpStats > div, .theme-dark .modalCard { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .pageHeading h1, .theme-dark .sectionHeading h2, .theme-dark .dashboardCard h3, .theme-dark .opsCard strong, .theme-dark .managedServiceTitle h3, .theme-dark .settingsOptionHeader h2, .theme-dark .settingsIntro h3, .theme-dark .calculatorHeader h3, .theme-dark .savedLink strong, .theme-dark .officialQuickItem strong, .theme-dark .globalSearchResult strong, .theme-dark .followUpCustomer strong, .theme-dark .followUpMain strong, .theme-dark .followUpStats strong { color:#f1f5f9; }\n        .theme-dark .pageHeading p, .theme-dark .sectionHeading p, .theme-dark .dashboardCardHeader, .theme-dark .opsCard span, .theme-dark .opsCard small, .theme-dark .settingsOptionHeader p, .theme-dark .settingsIntro p, .theme-dark .settingsHint, .theme-dark .savedLink span, .theme-dark .officialQuickItem span, .theme-dark .globalSearchResult span, .theme-dark .followUpCustomer span, .theme-dark .followUpDate span, .theme-dark .followUpStats span { color:#94a3b8; }\n        .theme-dark input, .theme-dark select, .theme-dark textarea { background:#111827 !important; border-color:#334155 !important; color:#e2e8f0 !important; }\n        .theme-dark .themeOption { background:#111827; border-color:#334155; }\n        .theme-dark .themeOption.active { background:#172b4d; border-color:#2563eb; }\n        .theme-dark .dashboardQuickLinksEmpty, .theme-dark .followUpEmpty, .theme-dark .emptyState { background:#111827; border-color:#334155; color:#94a3b8; }\n        .theme-dark .dashboardQuickLink strong { color:#f1f5f9; }\n        .theme-dark .globalSearchResult:hover { background:#1e293b; }\n        .theme-dark .secondaryButton { background:#172033; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .secondaryButton:hover { background:#1e293b; }
-        .theme-dark .serviceManagementHeader { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .serviceManagementHeader h2, .theme-dark .serviceDirectoryBlock h2 { color:#f1f5f9; }\n        .theme-dark .managedServiceMeta span { background:#1e293b; color:#94a3b8; }\n        .theme-dark .templateChip, .theme-dark .stageRow { background:#111827; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .documentChecklistItem { background:#172033; border-color:#334155; }\n        .theme-dark .documentChecklistItem strong { color:#f1f5f9; }\n        .theme-dark .documentChecklistItem.missing { background:#2b2516; }\n        .theme-dark .documentChecklistItem.received { background:#13271d; }\n        .theme-dark .tableDocumentProgress small { color:#64748b; }\n        .theme-dark .paymentActivityItem, .theme-dark .attentionItem { background:#172033; border-color:#334155; }\n        .theme-dark .paymentActivityItem strong, .theme-dark .attentionItem strong { color:#f1f5f9; }\n        @media (max-width:900px) { .globalSearchWrap { width:min(560px,58vw); } .dashboardQuickLinks, .officialQuickGrid, .settingsDataActions { grid-template-columns:repeat(2,minmax(0,1fr)); } }\n        @media (max-width:640px) { .globalSearchWrap { position:relative; left:auto; top:auto; transform:none; width:auto; flex:1; order:2; } .topbar { gap:9px; } .topbarRight { order:3; } .dashboardQuickLinks, .officialQuickGrid, .themeOptions, .settingsDataActions { grid-template-columns:1fr; } .settingsOptionCard { padding:17px; } .settingsOptionHeader { flex-direction:column; } }\n      `}</style>
+        .theme-dark .serviceManagementHeader { background:#172033; border-color:#2b3950; box-shadow:none; }\n        .theme-dark .serviceManagementHeader h2, .theme-dark .serviceDirectoryBlock h2 { color:#f1f5f9; }\n        .theme-dark .managedServiceMeta span { background:#1e293b; color:#94a3b8; }\n        .theme-dark .templateChip, .theme-dark .stageRow { background:#111827; border-color:#334155; color:#cbd5e1; }\n        .theme-dark .documentChecklistItem { background:#172033; border-color:#334155; }\n        .theme-dark .documentChecklistItem strong { color:#f1f5f9; }\n        .theme-dark .documentChecklistItem.missing { background:#2b2516; }\n        .theme-dark .documentChecklistItem.received { background:#13271d; }\n        .theme-dark .tableDocumentProgress small { color:#64748b; }\n        .theme-dark .paymentActivityItem, .theme-dark .attentionItem { background:#172033; border-color:#334155; }\n        .theme-dark .paymentActivityItem strong, .theme-dark .attentionItem strong { color:#f1f5f9; }\n        @media (max-width:900px) { .globalSearchWrap { width:min(560px,58vw); } .dashboardQuickLinks, .officialQuickGrid, .settingsDataActions { grid-template-columns:repeat(2,minmax(0,1fr)); } }\n        @media (max-width:640px) { .globalSearchWrap { position:relative; left:auto; top:auto; transform:none; width:auto; flex:1; order:2; } .topbar { gap:9px; } .topbarRight { order:3; } .dashboardQuickLinks, .officialQuickGrid, .themeOptions, .settingsDataActions { grid-template-columns:1fr; } .settingsOptionCard { padding:17px; } .settingsOptionHeader { flex-direction:column; } }\n        /* MOBILE UX PASS — touch targets, overflow safety and compact workspace layout */
+        @media (max-width:640px) {
+          html, body, #root { max-width:100%; overflow-x:hidden; }
+          .mainArea { min-width:0; width:100%; }
+          .content { min-width:0; width:100%; box-sizing:border-box; padding-left:12px !important; padding-right:12px !important; }
+          .topbar { min-width:0; padding-left:10px !important; padding-right:10px !important; }
+          .mobileMenuButton { flex:0 0 auto; }
+          .mobileMenuButton .iconButton { width:40px; height:40px; min-width:40px; display:flex; align-items:center; justify-content:center; }
+          .globalSearchWrap { min-width:0; }
+          .searchBox { min-width:0; width:100% !important; box-sizing:border-box; }
+          .searchBox input { min-width:0; font-size:12px !important; }
+          .topbarRight { flex:0 0 auto; min-width:0; gap:6px !important; }
+          .systemStatus { display:none !important; }
+          .themeToggle { flex:0 0 auto; }
+          .accountMenuWrap { flex:0 0 auto; }
+          .avatarButton { width:38px !important; height:38px !important; min-width:38px !important; }
+          .pageHeading { min-width:0; }
+          .pageHeading h1 { font-size:22px !important; line-height:1.2; }
+          .pageHeading p { max-width:100%; line-height:1.5; }
+          .sectionHeading { min-width:0; }
+          .dashboardCard, .opsCard, .statsCard, .serviceCard, .managedServiceCard, .calculatorCard, .settingsPanel, .modalCard { max-width:100%; box-sizing:border-box; }
+          button, select, input, textarea { touch-action:manipulation; }
+          button { min-height:40px; }
+          .iconButton { min-height:40px; }
+          .modalOverlay { padding:10px !important; box-sizing:border-box; }
+          .modalCard { width:100% !important; max-height:92vh; overflow:auto; }
+          .accountDropdown { max-height:calc(100vh - 82px); overflow:auto; }
+        }
+        @media (max-width:420px) {
+          .content { padding-left:10px !important; padding-right:10px !important; }
+          .topbar { gap:6px !important; }
+          .mobileMenuButton .iconButton { width:38px; height:38px; min-width:38px; }
+          .avatarButton { width:36px !important; height:36px !important; min-width:36px !important; }
+          .themeToggleTrack { width:30px; }
+          .themeToggleThumb { width:13px; height:13px; }
+          .themeToggle.dark .themeToggleThumb { transform:translateX(13px); }
+          .globalSearchWrap { min-width:0; }
+          .searchBox input { font-size:11px !important; }
+        }
+      `}</style>
       <div className={`appShell ${theme === "dark" ? "theme-dark" : theme === "emerald" ? "theme-emerald" : "theme-light"}`}>
       <Sidebar
         page={page}
@@ -6064,7 +6932,7 @@ function App({ user, onSignOut, workspace, userProfile, workspaceRole }) {
             <SettingsPage
               profile={businessProfile}
               workspace={workspace}
-              onSave={setBusinessProfile}
+              onSave={saveBusinessProfile}
               onSavePrintPricing={savePrintPricing}
               theme={theme}
               onThemeChange={setTheme}
@@ -6213,7 +7081,7 @@ function GlobalSearchResults({ results, setPage, setSelectedCustomer }) {
     <div className="globalSearchPanel">
       {results.map((result) => {
         const icon = result.type === "customer" ? <Users size={16} /> : result.type === "service" ? <FileText size={16} /> : result.type === "link" ? <Bookmark size={16} /> : <LayoutDashboard size={16} />;
-        if (result.type === "link") return <a key={`${result.type}-${result.id}`} href={result.link.url} target="_blank" rel="noreferrer" className="globalSearchResult">{icon}<div><strong>{result.title}</strong><span>{result.subtitle}</span></div><ExternalLink size={14} /></a>;
+        if (result.type === "link") return <a key={`${result.type}-${result.id}`} href={getSafeExternalUrl(result.link.url)} target="_blank" rel="noopener noreferrer" className="globalSearchResult">{icon}<div><strong>{result.title}</strong><span>{result.subtitle}</span></div><ExternalLink size={14} /></a>;
         return <button key={`${result.type}-${result.id}`} className="globalSearchResult" onClick={() => result.type === "customer" ? setSelectedCustomer(result.task) : setPage(result.page)}>{icon}<div><strong>{result.title}</strong><span>{result.subtitle}</span></div><ChevronRight size={14} /></button>;
       })}
     </div>
@@ -6768,7 +7636,7 @@ function Dashboard({ tasks, setPage, setSelectedCustomer, businessProfile, links
         {links.length ? (
           <div className="dashboardQuickLinks">
             {links.slice(0, 6).map((link) => (
-              <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="dashboardQuickLink">
+              <a key={link.id} href={getSafeExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="dashboardQuickLink">
                 <div className="dashboardQuickLinkIcon"><Globe2 size={16} /></div>
                 <div><strong>{link.name}</strong><span>{link.url}</span></div>
                 <ExternalLink size={14} />
@@ -6828,6 +7696,9 @@ function HelpSupportPage() {
 
   const answerQuestion = (question) => {
     const text = question.toLowerCase();
+    if (/self[- ]?harm|suicid|kill myself|hurt myself|end my life/.test(text)) {
+      return "I’m sorry you’re dealing with this. I can’t provide help with self-harm. If you may hurt yourself or someone else, please contact local emergency services or a trusted person who can stay with you. In India, you can also call Tele-MANAS at 14416 for mental-health support.";
+    }
     if (/qr|scan|customer portal/.test(text)) return faqs[0].a;
     if (/print job|request|process|printing|accepted|completed/.test(text)) return faqs[1].a;
     if (/price|pricing|estimate|amount|rate/.test(text)) return faqs[2].a;
@@ -6928,6 +7799,7 @@ function HelpSupportPage() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask for help..."
               aria-label="Ask for help"
+              maxLength={500}
             />
             <button type="submit" aria-label="Send help question" title="Send">
               <ChevronRight size={17} />
@@ -7047,7 +7919,7 @@ function PrintEarningsPage({ workspace }) {
       })));
     } catch (err) {
       console.error("Print earnings load failed:", err);
-      setError(err?.message || "Could not load print earnings.");
+      setError(getSafeUiError(err, "Could not load print earnings."));
       setJobs([]);
     } finally {
       setLoading(false);
@@ -7393,7 +8265,7 @@ function SettingsPage({ profile, workspace, onSave, onSavePrintPricing, theme, o
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const cleanedProfile = {
       businessName: form.businessName?.trim() || "CyberCafe Helper",
@@ -7403,8 +8275,12 @@ function SettingsPage({ profile, workspace, onSave, onSavePrintPricing, theme, o
       gstin: form.gstin?.trim().toUpperCase() || "",
       receiptFooter: form.receiptFooter?.trim() || "Thank you for using our services."
     };
-    localStorage.setItem("cc_business_profile", JSON.stringify(cleanedProfile));
-    onSave(cleanedProfile);
+    try {
+      await onSave(cleanedProfile);
+    } catch (error) {
+      alert(`Could not save business profile.\n\n${getSafeUiError(error, "Something went wrong. Please try again.")}`);
+      return;
+    }
     setForm(cleanedProfile);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
@@ -7492,7 +8368,7 @@ function SettingsPage({ profile, workspace, onSave, onSavePrintPricing, theme, o
 
       {activeTab === "data" && (
         <section className="settingsOptionCard settingsTabPanel">
-          <div className="settingsOptionHeader"><div><span className="sectionEyebrow">DATA & BACKUP</span><h2>Workspace Data</h2><p>Your MVP data currently lives in this browser. Keep a backup before changing devices or browsers.</p></div><Database size={21} /></div>
+          <div className="settingsOptionHeader"><div><span className="sectionEyebrow">DATA & BACKUP</span><h2>Workspace Data</h2><p>Workspace data is stored securely in Supabase. Export a backup when you need an offline copy or before major changes.</p></div><Database size={21} /></div>
           <div className="settingsDataActions">
             <button type="button" className="secondaryButton settingsDataButton" onClick={onExportBackup}><Download size={16} /><div><strong>Export Backup</strong><span>Download all workspace data as JSON</span></div></button>
             <button type="button" className="secondaryButton settingsDataButton" onClick={() => fileInputRef.current?.click()}><Upload size={16} /><div><strong>Import Backup</strong><span>Restore a previous JSON backup</span></div></button>
@@ -7727,7 +8603,7 @@ function AiCustomerSummaryModal({ customer, apiKeyConfigured, onClose, onGenerat
       const result = await onGenerate(customer, setProgress);
       setSummary(result);
     } catch (err) {
-      setError(err?.message || "Unable to generate the AI summary.");
+      setError(getSafeUiError(err, "Unable to generate the AI summary."));
     } finally {
       setLoading(false);
     }
@@ -7773,7 +8649,7 @@ function AiCustomerSummaryModal({ customer, apiKeyConfigured, onClose, onGenerat
                 )}
               </div>
               <div className="aiSummaryFooter">
-                <span>AI uses only the CRM data shown in this customer record.</span>
+                <span>AI uses only the CRM data shown in this customer record. AI-generated suggestions may be inaccurate; verify important details before acting.</span>
                 <button className="primaryButton" onClick={handleGenerate} disabled={loading}>{loading ? "Generating…" : summary ? "Regenerate Summary" : "Generate AI Summary"}</button>
               </div>
             </>
@@ -7868,7 +8744,7 @@ function ServiceCard({ service }) {
         <h3>{service.title}</h3>
         <div className="serviceLinks">
           {service.links.map((link) => (
-            <a key={link.name} href={link.url} target="_blank" rel="noreferrer" className="portalLink">
+            <a key={link.name} href={getSafeExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="portalLink">
               <span>{link.name}</span><ExternalLink size={14} />
             </a>
           ))}
@@ -8379,7 +9255,7 @@ function WorkTable({
                     <td>
                       <a
                         className="phoneLink"
-                        href={`tel:${task.phone}`}
+                        href={getSafePhoneUrl(task.phone)}
                       >
                         <Phone
                           size={14}
@@ -8489,13 +9365,7 @@ function WorkTable({
                         <div className="rowActions">
                           <a
                             className="rowAction whatsapp"
-                            href={`https://wa.me/91${String(
-                              task.phone ||
-                                ""
-                            ).replace(
-                              /\D/g,
-                              ""
-                            )}`}
+                            href={getSafeWhatsAppUrl("91" + String(task.phone || ""))}
                             target="_blank"
                             rel="noreferrer"
                             title="WhatsApp"
@@ -8656,7 +9526,7 @@ function CustomerDetails({
 
           <div className="profileActions">
             <a
-              href={`tel:${customer.phone}`}
+              href={getSafePhoneUrl(customer.phone)}
               className="profileAction"
             >
               <Phone size={17} />
@@ -8664,13 +9534,7 @@ function CustomerDetails({
             </a>
 
             <a
-              href={`https://wa.me/91${String(
-                customer.phone ||
-                  ""
-              ).replace(
-                /\D/g,
-                ""
-              )}`}
+              href={getSafeWhatsAppUrl("91" + String(customer.phone || ""))}
               target="_blank"
               rel="noreferrer"
               className="profileAction whatsappAction"
@@ -10138,7 +11002,7 @@ function QuickLinks({
 
                     <a
                       href={
-                        link.url
+                        getSafeExternalUrl(link.url)
                       }
                       target="_blank"
                       rel="noreferrer"
@@ -10195,7 +11059,7 @@ function QuickLinks({
                     <strong>{link.name}</strong>
                     <span>{link.category}</span>
                   </div>
-                  <a href={link.url} target="_blank" rel="noreferrer" className="rowAction">
+                  <a href={getSafeExternalUrl(link.url)} target="_blank" rel="noopener noreferrer" className="rowAction">
                     <ExternalLink size={14} />
                   </a>
                   <button
@@ -10465,7 +11329,7 @@ function printReceipt(task, businessProfile = {}) {
     window.open(
       "",
       "_blank",
-      "width=800,height=900"
+      "noopener,noreferrer,width=800,height=900"
     );
 
   if (!receiptWindow) {
@@ -10479,10 +11343,7 @@ function printReceipt(task, businessProfile = {}) {
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Receipt - ${
-          task.reference ||
-          task.name
-        }</title>
+        <title>Receipt - ${escapeHtml(task.reference || task.name)}</title>
 
         <style>
           body {
@@ -10613,11 +11474,11 @@ function printReceipt(task, businessProfile = {}) {
           <div class="header">
             <div>
               <h1>
-                ${businessProfile.businessName || "CyberCafe Helper"}
+                ${escapeHtml(businessProfile.businessName || "CyberCafe Helper")}
               </h1>
 
               <div class="muted">
-                ${businessProfile.ownerName ? `Owner: ${businessProfile.ownerName}` : "Digital Seva / Customer Receipt"}
+                ${escapeHtml(businessProfile.ownerName ? `Owner: ${businessProfile.ownerName}` : "Digital Seva / Customer Receipt")}
               </div>
             </div>
 
@@ -10627,10 +11488,7 @@ function printReceipt(task, businessProfile = {}) {
               </strong>
 
               <div class="muted">
-                #${
-                  task.reference ||
-                  task.id
-                }
+                #${escapeHtml(task.reference || task.id)}
               </div>
             </div>
           </div>
@@ -10638,60 +11496,57 @@ function printReceipt(task, businessProfile = {}) {
           <div class="row">
             <span>Customer</span>
             <strong>
-              ${task.name}
+              ${escapeHtml(task.name)}
             </strong>
           </div>
 
           <div class="row">
             <span>Phone</span>
             <strong>
-              ${
-                task.phone ||
-                "—"
-              }
+              ${escapeHtml(task.phone || "—")}
             </strong>
           </div>
 
           <div class="row">
             <span>Service</span>
             <strong>
-              ${task.service}
+              ${escapeHtml(task.service)}
             </strong>
           </div>
 
           <div class="row">
             <span>Total Amount</span>
             <strong>
-              ₹${task.amount || 0}
+              ₹${escapeHtml(task.amount || 0)}
             </strong>
           </div>
 
           <div class="row">
             <span>Paid</span>
             <strong>
-              ₹${task.paid || 0}
+              ₹${escapeHtml(task.paid || 0)}
             </strong>
           </div>
 
           <div class="row total">
             <span>Amount Due</span>
             <strong>
-              ₹${due}
+              ₹${escapeHtml(due)}
             </strong>
           </div>
 
           <div class="row">
             <span>Status</span>
             <strong>
-              ${task.status}
+              ${escapeHtml(task.status)}
             </strong>
           </div>
 
           <div class="footer">
-            ${businessProfile.address ? `<div>${businessProfile.address}</div>` : ""}
-            ${businessProfile.phone ? `<div>Phone: ${businessProfile.phone}</div>` : ""}
-            ${businessProfile.gstin ? `<div>GSTIN: ${businessProfile.gstin}</div>` : ""}
-            <div>${businessProfile.receiptFooter || "Thank you for using our services."}</div>
+            ${businessProfile.address ? `<div>${escapeHtml(businessProfile.address)}</div>` : ""}
+            ${businessProfile.phone ? `<div>Phone: ${escapeHtml(businessProfile.phone)}</div>` : ""}
+            ${businessProfile.gstin ? `<div>GSTIN: ${escapeHtml(businessProfile.gstin)}</div>` : ""}
+            <div>${escapeHtml(businessProfile.receiptFooter || "Thank you for using our services.")}</div>
           </div>
         </div>
 
@@ -10716,13 +11571,45 @@ function AppRoot() {
   const [publicMode, setPublicMode] = useState(() => {
     if (typeof window === "undefined") return "landing";
     const params = new URLSearchParams(window.location.search);
-    return params.get("mode") === "customer" && params.get("workspace") ? "qr" : "landing";
+    const workspaceId = params.get("workspace") || "";
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId);
+    return params.get("mode") === "customer" && isUuid ? "qr" : "landing";
   });
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [legalPage, setLegalPage] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const legal = new URLSearchParams(window.location.search).get("legal");
+    return legal === "privacy" || legal === "terms" ? legal : null;
+  });
   const [qrWorkspaceId] = useState(() => {
     if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("workspace") || "";
+    const workspaceId = new URLSearchParams(window.location.search).get("workspace") || "";
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId) ? workspaceId : "";
   });
+
+  useEffect(() => {
+  let title = "CyberCafe Helper";
+
+  if (legalPage === "privacy") {
+    title = "Privacy Policy · CyberCafe Helper";
+  } else if (legalPage === "terms") {
+    title = "Terms & Conditions · CyberCafe Helper";
+  } else if (recoveryMode) {
+    title = "Reset Password · CyberCafe Helper";
+  } else if (publicMode === "qr") {
+    title = "Print Request · CyberCafe Helper";
+  } else if (publicMode === "login") {
+    title = "Sign In · CyberCafe Helper";
+  } else if (publicMode === "signup") {
+    title = "Create Workspace · CyberCafe Helper";
+  } else if (publicMode === "forgot") {
+    title = "Forgot Password · CyberCafe Helper";
+  } else if (user) {
+    title = "Dashboard · CyberCafe Helper";
+  }
+
+  document.title = title;
+}, [legalPage, recoveryMode, publicMode, user]);
 
   // Emergency startup fallback: the UI must never remain on the loading screen.
   useEffect(() => {
@@ -10787,7 +11674,7 @@ function AppRoot() {
       try {
         const { data, error } = await supabase
           .from("user_profiles")
-          .select("id, full_name, email, role, created_at, updated_at")
+          .select("id, full_name, email, role, terms_accepted_at, terms_version, privacy_policy_version, created_at, updated_at")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -10808,9 +11695,12 @@ function AppRoot() {
             id: user.id,
             full_name: user.user_metadata?.full_name || "",
             email: user.email || "",
-            role: "owner"
+            role: "owner",
+            terms_accepted_at: user.user_metadata?.terms_accepted_at || null,
+            terms_version: user.user_metadata?.terms_version || null,
+            privacy_policy_version: user.user_metadata?.privacy_policy_version || null
           })
-          .select("id, full_name, email, role, created_at, updated_at")
+          .select("id, full_name, email, role, terms_accepted_at, terms_version, privacy_policy_version, created_at, updated_at")
           .single();
 
         if (createError) {
@@ -10986,6 +11876,15 @@ function AppRoot() {
     return () => { mounted = false; };
   }, [user]);
 
+  useEffect(() => {
+    const handler = (event) => {
+      const value = event.detail;
+      if (value === "privacy" || value === "terms") setLegalPage(value);
+    };
+    window.addEventListener("cc-open-legal", handler);
+    return () => window.removeEventListener("cc-open-legal", handler);
+  }, []);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setRecoveryMode(false);
@@ -11006,6 +11905,16 @@ function AppRoot() {
 
   if (recoveryMode) {
     return <ResetPasswordScreen onComplete={() => { setRecoveryMode(false); setUser(null); setPublicMode("login"); supabase.auth.signOut(); }} />;
+  }
+
+  if (legalPage) {
+    return (
+      <LegalPage
+        type={legalPage}
+        onBack={() => { setLegalPage(null); setPublicMode("landing"); }}
+        onSignUp={() => { setLegalPage(null); setPublicMode("signup"); }}
+      />
+    );
   }
 
   if (publicMode === "qr" && qrWorkspaceId) {
@@ -11061,6 +11970,6 @@ createRoot(document.getElementById("root")).render(<AppRoot />);
 //
 // STEP 18B-1 STATUS
 // Supabase customer repository is ready.
-// The existing localStorage CRM is intentionally unchanged.
+// Customer data is stored in Supabase; localStorage is limited to non-sensitive preferences and print tracking.
 // The next step will wire the Customer CRM UI to these functions.
 // ============================================================
