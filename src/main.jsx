@@ -3115,70 +3115,535 @@ function CafeQRPage({ workspace, businessProfile }) {
   };
 
   const printQr = () => {
-    const printWindow = window.open("", "_blank", "width=700,height=800");
-    if (!printWindow) return;
-
     const qrSvg = document.querySelector("#cafe-qr-code svg");
     if (!qrSvg) {
-      printWindow.close();
+      alert("QR code is not ready yet. Please try again.");
       return;
     }
-    const qrMarkup = qrSvg.outerHTML;
-    const businessName = escapeHtml(businessProfile?.businessName || workspace?.name || "CyberCafe Helper");
-    const safeQrUrl = escapeHtml(qrUrl);
 
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>${businessName} - Customer QR</title>
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: Inter, Arial, sans-serif;
-              background: #fff;
-              color: #111827;
-            }
-            .sheet {
-              width: 520px;
-              padding: 42px;
-              text-align: center;
-              border: 1px solid #e5e7eb;
-              border-radius: 20px;
-            }
-            h1 { margin: 0 0 8px; font-size: 28px; }
-            p { margin: 0 0 26px; color: #64748b; font-size: 15px; line-height: 1.5; }
-            .qr { display: flex; justify-content: center; margin: 20px 0 26px; }
-            .scan { font-size: 18px; font-weight: 800; }
-            .url { margin-top: 10px; color: #94a3b8; font-size: 10px; word-break: break-all; }
-            @media print {
-              .sheet { border: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="sheet">
-            <h1>${businessName}</h1>
-            <p>Scan this QR code to open our CyberCafe Helper customer portal.</p>
-            <div class="qr">${qrMarkup}</div>
-            <div class="scan">Scan to continue</div>
-            <div class="url">${safeQrUrl}</div>
+    const businessName = escapeHtml(
+      businessProfile?.businessName ||
+        workspace?.name ||
+        "CyberCafe Helper"
+    );
+    const phone = escapeHtml(businessProfile?.phone || "");
+    const address = escapeHtml(businessProfile?.address || "");
+    const safeQrUrl = escapeHtml(qrUrl);
+    const qrMarkup = qrSvg.outerHTML;
+
+    // Build a polished poster in the current document and use the native
+    // print dialog. No popup/new tab is required.
+    const printRootId = "cybercafe-qr-print-root";
+    const styleId = "cybercafe-qr-print-style";
+
+    document.getElementById(printRootId)?.remove();
+    document.getElementById(styleId)?.remove();
+
+    const printRoot = document.createElement("div");
+    printRoot.id = printRootId;
+
+    printRoot.innerHTML = `
+      <div class="qr-poster">
+        <div class="qr-poster-top">
+          <div class="qr-brand">
+            <div class="qr-brand-mark">CC</div>
+            <div>
+              <div class="qr-brand-name">${businessName}</div>
+              <div class="qr-brand-subtitle">SMARTER • FASTER • SIMPLER</div>
+            </div>
           </div>
-          <script>
-            window.onload = function () {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
+          <div class="qr-top-badge">CUSTOMER PRINT PORTAL</div>
+        </div>
+
+        <div class="qr-hero">
+          <div class="qr-hero-copy">
+            <div class="qr-eyebrow">YOUR PHONE → OUR PRINT QUEUE</div>
+            <h1>Print without<br /><span>waiting in line.</span></h1>
+            <p>
+              Scan the QR code, upload your documents from your phone,
+              and send the print request directly to our café.
+            </p>
+
+            <div class="qr-steps">
+              <div class="qr-step">
+                <div class="qr-step-number">01</div>
+                <div>
+                  <strong>SCAN</strong>
+                  <span>Use your phone camera</span>
+                </div>
+              </div>
+              <div class="qr-step">
+                <div class="qr-step-number">02</div>
+                <div>
+                  <strong>UPLOAD</strong>
+                  <span>Select your documents</span>
+                </div>
+              </div>
+              <div class="qr-step">
+                <div class="qr-step-number">03</div>
+                <div>
+                  <strong>SUBMIT</strong>
+                  <span>We receive your request</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="qr-code-panel">
+            <div class="qr-code-label">SCAN TO START</div>
+            <div class="qr-code-frame">
+              ${qrMarkup}
+            </div>
+            <div class="qr-scan-pill">
+              <span class="qr-scan-dot"></span>
+              Point your camera here
+            </div>
+            <div class="qr-no-app">NO APP • NO LOGIN • JUST SCAN</div>
+          </div>
+        </div>
+
+        <div class="qr-feature-strip">
+          <div class="qr-feature">
+            <div class="qr-feature-icon">↑</div>
+            <div>
+              <strong>Upload from phone</strong>
+              <span>PDFs, images & documents</span>
+            </div>
+          </div>
+          <div class="qr-feature">
+            <div class="qr-feature-icon">⚡</div>
+            <div>
+              <strong>Fast submission</strong>
+              <span>Send your request in seconds</span>
+            </div>
+          </div>
+          <div class="qr-feature">
+            <div class="qr-feature-icon">✓</div>
+            <div>
+              <strong>Simple process</strong>
+              <span>We handle the print request</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="qr-contact">
+          <div>
+            <div class="qr-contact-label">VISIT US</div>
+            <div class="qr-contact-value">
+              ${address || "Your cyber café address"}
+            </div>
+          </div>
+
+          ${
+            phone
+              ? `
+                <div class="qr-contact-divider"></div>
+                <div>
+                  <div class="qr-contact-label">NEED HELP?</div>
+                  <div class="qr-contact-value">${phone}</div>
+                </div>
+              `
+              : ""
+          }
+
+          <div class="qr-contact-message">
+            <strong>SCAN. SEND. PRINT.</strong>
+            <span>It's that simple.</span>
+          </div>
+        </div>
+
+        <div class="qr-footer">
+          <span>Powered by <strong>CyberCafe Helper</strong></span>
+          <span class="qr-footer-url">${safeQrUrl}</span>
+        </div>
+      </div>
+    `;
+
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      #${printRootId} {
+        display: none;
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+
+        html,
+        body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+        }
+
+        body > *:not(#${printRootId}) {
+          display: none !important;
+        }
+
+        #${printRootId} {
+          display: block !important;
+        }
+
+        .qr-poster {
+          width: 210mm;
+          min-height: 297mm;
+          box-sizing: border-box;
+          padding: 12mm 12mm 9mm;
+          background:
+            radial-gradient(circle at 85% 12%, rgba(59,130,246,.13), transparent 28%),
+            radial-gradient(circle at 10% 45%, rgba(14,165,233,.10), transparent 25%),
+            #ffffff;
+          color: #0f172a;
+          font-family: Arial, Helvetica, sans-serif;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .qr-poster::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 7mm;
+          background: linear-gradient(90deg, #0f4cdb, #06b6d4, #2563eb);
+        }
+
+        .qr-poster-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 5mm 1mm 4mm;
+          border-bottom: 1px solid #dbeafe;
+        }
+
+        .qr-brand {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+        }
+
+        .qr-brand-mark {
+          width: 38px;
+          height: 38px;
+          border-radius: 11px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #0f4cdb, #06b6d4);
+          color: #fff;
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: -1px;
+          box-shadow: 0 6px 15px rgba(37,99,235,.20);
+        }
+
+        .qr-brand-name {
+          font-size: 19px;
+          line-height: 1.15;
+          font-weight: 900;
+          letter-spacing: -.4px;
+        }
+
+        .qr-brand-subtitle {
+          margin-top: 4px;
+          font-size: 7px;
+          font-weight: 800;
+          letter-spacing: 2px;
+          color: #64748b;
+        }
+
+        .qr-top-badge {
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 7px;
+          font-weight: 900;
+          letter-spacing: 1.1px;
+          white-space: nowrap;
+        }
+
+        .qr-hero {
+          display: grid;
+          grid-template-columns: 1fr 83mm;
+          gap: 9mm;
+          align-items: center;
+          padding: 9mm 3mm 8mm;
+        }
+
+        .qr-eyebrow {
+          display: inline-block;
+          color: #2563eb;
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: 1.4px;
+          margin-bottom: 5px;
+        }
+
+        .qr-hero h1 {
+          margin: 0;
+          font-size: 31px;
+          line-height: 1.02;
+          letter-spacing: -1.2px;
+          font-weight: 950;
+        }
+
+        .qr-hero h1 span {
+          color: #2563eb;
+        }
+
+        .qr-hero-copy > p {
+          margin: 9px 0 0;
+          max-width: 88mm;
+          color: #64748b;
+          font-size: 10px;
+          line-height: 1.55;
+        }
+
+        .qr-steps {
+          margin-top: 9mm;
+          display: grid;
+          gap: 5px;
+        }
+
+        .qr-step {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+        }
+
+        .qr-step-number {
+          width: 23px;
+          height: 23px;
+          border-radius: 7px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #eff6ff;
+          color: #2563eb;
+          font-size: 7px;
+          font-weight: 900;
+        }
+
+        .qr-step strong {
+          display: block;
+          font-size: 8px;
+          letter-spacing: .8px;
+        }
+
+        .qr-step span {
+          display: block;
+          margin-top: 2px;
+          color: #64748b;
+          font-size: 7px;
+        }
+
+        .qr-code-panel {
+          padding: 6mm;
+          border-radius: 7mm;
+          text-align: center;
+          background: linear-gradient(145deg, #0f4cdb, #2563eb 58%, #06b6d4);
+          box-shadow: 0 13px 28px rgba(37,99,235,.20);
+        }
+
+        .qr-code-label {
+          color: #dbeafe;
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: 1.8px;
+          margin-bottom: 4mm;
+        }
+
+        .qr-code-frame {
+          background: #fff;
+          padding: 5mm;
+          border-radius: 5mm;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 7px 18px rgba(15,23,42,.16);
+        }
+
+        .qr-code-frame svg {
+          width: 61mm;
+          height: 61mm;
+          display: block;
+        }
+
+        .qr-scan-pill {
+          margin: 4mm auto 0;
+          width: fit-content;
+          max-width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 10px;
+          border: 1px solid rgba(255,255,255,.32);
+          border-radius: 999px;
+          color: #fff;
+          background: rgba(255,255,255,.11);
+          font-size: 8px;
+          font-weight: 800;
+        }
+
+        .qr-scan-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #86efac;
+          box-shadow: 0 0 0 3px rgba(134,239,172,.16);
+        }
+
+        .qr-no-app {
+          margin-top: 4mm;
+          color: rgba(255,255,255,.78);
+          font-size: 6.5px;
+          font-weight: 900;
+          letter-spacing: 1.1px;
+        }
+
+        .qr-feature-strip {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 4mm;
+          padding: 5mm;
+          border: 1px solid #dbeafe;
+          border-radius: 5mm;
+          background: linear-gradient(180deg, #f8fbff, #eff6ff);
+        }
+
+        .qr-feature {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          min-width: 0;
+        }
+
+        .qr-feature-icon {
+          width: 27px;
+          height: 27px;
+          flex: 0 0 27px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          border: 1px solid #bfdbfe;
+          color: #2563eb;
+          font-size: 13px;
+          font-weight: 900;
+        }
+
+        .qr-feature strong {
+          display: block;
+          font-size: 8px;
+        }
+
+        .qr-feature span {
+          display: block;
+          margin-top: 3px;
+          color: #64748b;
+          font-size: 6.5px;
+          line-height: 1.3;
+        }
+
+        .qr-contact {
+          margin-top: 7mm;
+          padding: 5mm 4mm;
+          display: grid;
+          grid-template-columns: 1fr auto 1fr auto;
+          gap: 5mm;
+          align-items: center;
+          border-radius: 5mm;
+          background: #0f172a;
+          color: #fff;
+        }
+
+        .qr-contact-label {
+          color: #93c5fd;
+          font-size: 6.5px;
+          font-weight: 900;
+          letter-spacing: 1.2px;
+          margin-bottom: 3px;
+        }
+
+        .qr-contact-value {
+          font-size: 8px;
+          line-height: 1.35;
+          font-weight: 700;
+        }
+
+        .qr-contact-divider {
+          width: 1px;
+          height: 26px;
+          background: #334155;
+        }
+
+        .qr-contact-message {
+          text-align: right;
+        }
+
+        .qr-contact-message strong {
+          display: block;
+          color: #67e8f9;
+          font-size: 8px;
+          letter-spacing: 1px;
+        }
+
+        .qr-contact-message span {
+          display: block;
+          margin-top: 3px;
+          color: #cbd5e1;
+          font-size: 7px;
+        }
+
+        .qr-footer {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 4mm;
+          color: #94a3b8;
+          font-size: 6px;
+        }
+
+        .qr-footer strong {
+          color: #475569;
+        }
+
+        .qr-footer-url {
+          max-width: 100mm;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(printRoot);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+
+        const cleanup = () => {
+          printRoot.remove();
+          style.remove();
+          window.removeEventListener("afterprint", cleanup);
+        };
+
+        window.addEventListener("afterprint", cleanup);
+
+        // Fallback for browsers that do not fire afterprint.
+        window.setTimeout(cleanup, 60000);
+      });
+    });
   };
 
   return (
