@@ -73,6 +73,78 @@ const getSafeUiError = (error, fallback = "Something went wrong. Please try agai
   return message;
 };
 
+
+/**
+ * Call a Supabase Edge Function with a current access token.
+ *
+ * The important part here is the single 401 recovery path:
+ * - obtain the current session
+ * - call the function
+ * - if the request is unauthorized, refresh the session
+ * - retry exactly once with the new token
+ *
+ * This prevents a stale-but-present access token from breaking
+ * authenticated Edge Functions after the app has been open for a while.
+ */
+async function invokeAuthenticatedFunction(functionName, options = {}) {
+  const getSessionResult = await supabase.auth.getSession();
+
+  if (getSessionResult.error) {
+    throw getSessionResult.error;
+  }
+
+  let session = getSessionResult.data?.session || null;
+
+  if (!session?.access_token) {
+    const refreshResult = await supabase.auth.refreshSession();
+
+    if (refreshResult.error) {
+      throw refreshResult.error;
+    }
+
+    session = refreshResult.data?.session || null;
+  }
+
+  if (!session?.access_token) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  const invoke = (accessToken) =>
+    supabase.functions.invoke(functionName, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+  let result = await invoke(session.access_token);
+
+  // A session can contain a token that has become invalid between
+  // getSession() and the Edge Function request. Recover once.
+  if (result.error?.context?.status === 401 || result.error?.status === 401) {
+    const refreshResult = await supabase.auth.refreshSession();
+
+    if (refreshResult.error) {
+      throw refreshResult.error;
+    }
+
+    const refreshedSession = refreshResult.data?.session || null;
+
+    if (!refreshedSession?.access_token) {
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+
+    result = await invoke(refreshedSession.access_token);
+  }
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result.data;
+}
+
 const DEFAULT_PRINT_PRICING = {
   bwPrice: 2,
   colorPrice: 10,
@@ -3460,76 +3532,17 @@ function PrintJobsPage({ workspace }) {
   };
 
   const downloadFile = async (file) => {
-    const newWindow = window.open("about:blank", "_blank");
+    let newWindow = null;
 
     try {
       setBusyId(file.id);
       setError("");
 
-      if (!newWindow) {
-        throw new Error(
-          "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
-        );
-      }
-
-      newWindow.document.write(`
-        <html>
-          <head>
-            <title>Opening document...</title>
-            <style>
-              body {
-                margin: 0;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-family: Arial, sans-serif;
-                color: #475569;
-                background: #f8fafc;
-              }
-            </style>
-          </head>
-          <body>
-            <div>Opening document…</div>
-          </body>
-        </html>
-      `);
-      newWindow.document.close();
-
-      let {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      if (!session?.access_token) {
-        const refreshResult = await supabase.auth.refreshSession();
-
-        if (refreshResult.error) {
-          throw refreshResult.error;
-        }
-
-        session = refreshResult.data.session;
-      }
-
-      if (!session?.access_token) {
-        throw new Error("Your session has expired. Please sign in again.");
-      }
-
-      const { data, error } = await supabase.functions.invoke(
-        "get-print-file-url",
-        {
-          body: { fileId: file.id },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (error) throw error;
+      // Resolve authentication and the secure URL before opening the document.
+      // This avoids leaving a blank tab behind when authentication fails.
+      const data = await invokeAuthenticatedFunction("get-print-file-url", {
+        body: { fileId: file.id },
+      });
 
       if (!data?.signedUrl) {
         throw new Error(
@@ -3537,7 +3550,19 @@ function PrintJobsPage({ workspace }) {
         );
       }
 
-      newWindow.location.href = data.signedUrl;
+      // Open only after the signed URL has been authorized.
+      newWindow = window.open(data.signedUrl, "_blank");
+
+      if (!newWindow) {
+        throw new Error(
+          "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
+        );
+      }
+
+      try {
+        newWindow.opener = null;
+      } catch {}
+
     } catch (err) {
       console.error("Print file download failed:", err);
 
@@ -11694,22 +11719,37 @@ function AppRoot() {
     let mounted = true;
 
     const loadSession = async () => {
-      let timeoutId;
       try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error("Supabase session check timed out.")), 8000);
-        });
+        const { data, error } = await supabase.auth.getSession();
 
-        const { data, error } = await Promise.race([sessionPromise, timeoutPromise]);
-        if (!mounted) return;
-        if (error) console.error("Supabase session error:", error);
-        setUser(data?.session?.user || null);
+        if (error) {
+          console.error("Supabase session error:", error);
+          if (mounted) setUser(null);
+          return;
+        }
+
+        let session = data?.session || null;
+
+        if (!session?.access_token) {
+          const refreshResult = await supabase.auth.refreshSession();
+
+          if (!refreshResult.error) {
+            session = refreshResult.data?.session || null;
+          } else {
+            console.warn("Supabase session refresh during startup failed:", refreshResult.error);
+          }
+        }
+
+        if (mounted) {
+          setUser(session?.user || null);
+        }
       } catch (error) {
         console.error("Supabase session load failed:", error);
-        if (mounted) setUser(null);
+
+        // Do not aggressively sign the user out because a transient
+        // browser/network problem prevented the initial session read.
+        // Supabase Auth remains the source of truth through its listener.
       } finally {
-        if (timeoutId) clearTimeout(timeoutId);
         if (mounted) setLoading(false);
       }
     };
