@@ -2986,7 +2986,7 @@ function CafeQRPage({ workspace, businessProfile }) {
   };
 
   const printQr = () => {
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=700,height=800");
+    const printWindow = window.open("", "_blank", "width=700,height=800");
     if (!printWindow) return;
 
     const qrSvg = document.querySelector("#cafe-qr-code svg");
@@ -3049,6 +3049,7 @@ function CafeQRPage({ workspace, businessProfile }) {
       </html>
     `);
     printWindow.document.close();
+    printWindow.focus();
   };
 
   return (
