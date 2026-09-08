@@ -2986,3 +2986,806 @@ textarea {
 .step11Workflow .pageHeading {
   padding-left: 8px;
 }
+
+
+/* =========================================================
+   CYBERCAFE HELPER — FINAL MOBILE RESPONSIVE PASS
+   ========================================================= */
+
+/* ---------- GLOBAL MOBILE SAFETY ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 1024px) {
+
+  .mainArea {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .content {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dashboardColumns {
+    grid-template-columns: 1fr !important;
+  }
+
+  .opsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .servicesGrid,
+  .serviceGrid,
+  .managedServiceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+
+/* =========================================================
+   MOBILE — 768px
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  /* ---------- APP SHELL ---------- */
+
+  .appShell {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .mainArea {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+    overflow-x: hidden;
+  }
+
+  .content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 18px 14px 32px !important;
+    overflow-x: hidden;
+  }
+
+
+  /* ---------- SIDEBAR ---------- */
+
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1000;
+
+    width: min(300px, 86vw) !important;
+    max-width: 86vw;
+
+    transform: translateX(-105%);
+    transition: transform .24s ease;
+
+    box-shadow: 12px 0 35px rgba(15, 23, 42, .18);
+
+    overflow: hidden !important;
+  }
+
+  .sidebar.sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .sidebarOverlay {
+    position: fixed !important;
+    inset: 0;
+    z-index: 999;
+
+    background: rgba(15, 23, 42, .48);
+    backdrop-filter: blur(2px);
+  }
+
+  .mobileClose {
+    display: flex !important;
+  }
+
+  .sidebar .nav {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+  /* ---------- TOPBAR ---------- */
+
+  .topbar {
+    width: 100%;
+    min-width: 0;
+
+    height: auto !important;
+    min-height: 62px;
+
+    padding: 10px 12px !important;
+
+    display: flex;
+    align-items: center;
+
+    gap: 8px !important;
+
+    overflow: visible;
+  }
+
+  .mobileMenuButton {
+    display: flex !important;
+    flex: 0 0 auto;
+  }
+
+  .mobileMenuButton .iconButton {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+  }
+
+  .globalSearchWrap {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+
+    width: auto !important;
+    min-width: 0;
+
+    flex: 1 1 auto;
+    order: initial;
+  }
+
+  .searchBox {
+    width: 100% !important;
+    min-width: 0;
+    height: 40px;
+  }
+
+  .searchBox input {
+    width: 100%;
+    min-width: 0;
+    font-size: 12px !important;
+  }
+
+  .topbarRight {
+    flex: 0 0 auto;
+    min-width: 0;
+
+    display: flex;
+    align-items: center;
+    gap: 6px !important;
+  }
+
+  .systemStatus {
+    display: none !important;
+  }
+
+  .themeToggle {
+    flex: 0 0 auto;
+  }
+
+  .avatarButton {
+    flex: 0 0 auto;
+
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+  }
+
+
+  /* ---------- SEARCH RESULTS ---------- */
+
+  .globalSearchPanel {
+    position: absolute !important;
+    left: 0;
+    right: 0;
+
+    width: 100% !important;
+    max-width: calc(100vw - 28px);
+
+    max-height: min(65vh, 420px);
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    z-index: 1100;
+  }
+
+  .globalSearchResult {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .globalSearchResult > div {
+    min-width: 0;
+  }
+
+  .globalSearchResult strong,
+  .globalSearchResult span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+
+  /* ---------- PAGE HEADINGS ---------- */
+
+  .pageHeading {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pageHeading h1 {
+    font-size: 22px !important;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .pageHeading p {
+    max-width: 100%;
+    line-height: 1.5;
+  }
+
+  .sectionHeading {
+    width: 100%;
+    min-width: 0;
+
+    gap: 10px;
+  }
+
+  .sectionHeading > div {
+    min-width: 0;
+  }
+
+  .sectionHeading h2 {
+    overflow-wrap: anywhere;
+  }
+
+
+  /* ---------- STATS ---------- */
+
+  .statsGrid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px !important;
+  }
+
+  .statsCard {
+    min-width: 0;
+    width: 100%;
+  }
+
+
+  /* ---------- DASHBOARD ---------- */
+
+  .opsGrid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px !important;
+  }
+
+  .opsCard {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .opsCard > div:last-child {
+    min-width: 0;
+  }
+
+  .dashboardColumns {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboardCard {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dashboardCardHeader {
+    min-width: 0;
+  }
+
+  .dashboardCardHeader > div {
+    min-width: 0;
+  }
+
+
+  /* ---------- REVENUE CHART ---------- */
+
+  .revenueChart {
+    width: 100%;
+    min-width: 0;
+    gap: 5px !important;
+  }
+
+  .revenueBarGroup {
+    min-width: 0;
+  }
+
+  .revenueBarTrack {
+    max-width: 25px;
+  }
+
+
+  /* ---------- QUICK LINKS ---------- */
+
+  .dashboardQuickLinks,
+  .officialQuickGrid {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboardQuickLink,
+  .officialQuickItem {
+    min-width: 0;
+    width: 100%;
+  }
+
+
+  /* ---------- SERVICES ---------- */
+
+  .servicesGrid,
+  .serviceGrid,
+  .managedServiceGrid {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .serviceCard,
+  .managedServiceCard {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .serviceManagementHeader {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+
+  /* ---------- FOLLOW UPS ---------- */
+
+  .followUpHeaderRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .followUpItem {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .followUpMain {
+    min-width: 0;
+  }
+
+  .followUpMain strong,
+  .followUpMain span,
+  .followUpMain small {
+    overflow-wrap: anywhere;
+  }
+
+
+  /* ---------- REPORTS ---------- */
+
+  .reportsStatGrid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .reportsTwoCol {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+
+  /* ---------- SETTINGS ---------- */
+
+  .settingsPage,
+  .settingsPanel,
+  .settingsOptionCard {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .settingsTabs {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .settingsOptionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .themeOptions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settingsDataActions {
+    grid-template-columns: 1fr !important;
+  }
+
+
+  /* ---------- TOOLBARS ---------- */
+
+  .printJobsToolbar {
+    width: 100%;
+    min-width: 0;
+
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .printJobsToolbar > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .printJobsToolbar > div:last-child {
+    width: 100% !important;
+  }
+
+
+  /* ---------- PRINT JOBS ---------- */
+
+  .printJobsPage {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .printJobsHeader {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .printJobsHeader > button {
+    align-self: stretch !important;
+    width: 100%;
+  }
+
+  .printJobsTabs {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .printJobsTabs button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .printJobsKpis {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .printJobsStatusGrid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+
+  /* ---------- TABLES ---------- */
+
+  .tableWrap,
+  .tableContainer,
+  .tableScroll,
+  .dataTableWrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    max-width: none;
+  }
+
+
+  /* ---------- BUTTON GROUPS ---------- */
+
+  .modalActions {
+    flex-wrap: wrap;
+  }
+
+  .modalActions button {
+    min-height: 42px;
+  }
+
+  .buttonRow,
+  .actionRow,
+  .formActions {
+    flex-wrap: wrap;
+  }
+
+
+  /* ---------- MODALS ---------- */
+
+  .modalOverlay {
+    padding: 10px !important;
+    align-items: flex-end !important;
+  }
+
+  .modalCard {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    max-height: 92vh;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    border-radius: 16px !important;
+  }
+
+
+  /* ---------- FORMS ---------- */
+
+  .formGrid,
+  .twoColumn,
+  .formColumns {
+    grid-template-columns: 1fr !important;
+  }
+
+  .formGroup {
+    min-width: 0;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+
+  /* ---------- LONG TEXT ---------- */
+
+  .customerName,
+  .serviceName,
+  .reference,
+  .applicationNumber {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+
+  /* ---------- TOUCH TARGETS ---------- */
+
+  button,
+  select,
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 40px;
+  }
+
+  .iconButton {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE — 480px
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .content {
+    padding: 15px 10px 28px !important;
+  }
+
+  .topbar {
+    padding: 8px 9px !important;
+    gap: 6px !important;
+  }
+
+  .mobileMenuButton .iconButton {
+    width: 38px !important;
+    min-width: 38px !important;
+    height: 38px !important;
+  }
+
+  .avatarButton {
+    width: 38px !important;
+    min-width: 38px !important;
+    height: 38px !important;
+  }
+
+  .searchBox {
+    height: 38px;
+  }
+
+  .searchBox input {
+    font-size: 11px !important;
+  }
+
+  .pageHeading h1 {
+    font-size: 20px !important;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 7px !important;
+  }
+
+  .statsCard {
+    padding: 12px !important;
+  }
+
+  .opsGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .reportsStatGrid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .printJobsKpis,
+  .printJobsStatusGrid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .settingsTabs {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modalOverlay {
+    padding: 7px !important;
+  }
+
+  .modalCard {
+    max-height: 94vh;
+    border-radius: 14px !important;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES — 360px
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .content {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .topbar {
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+
+  .themeToggleIcon {
+    display: none;
+  }
+
+  .themeToggleTrack {
+    width: 28px !important;
+  }
+
+  .themeToggleThumb {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .themeToggle.dark .themeToggleThumb {
+    transform: translateX(12px) !important;
+  }
+
+  .mobileMenuButton .iconButton {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+  }
+
+  .avatarButton {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+  }
+
+  .searchBox input {
+    font-size: 10px !important;
+  }
+
+  .pageHeading h1 {
+    font-size: 19px !important;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .printJobsKpis,
+  .printJobsStatusGrid,
+  .reportsStatGrid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* =========================================================
+   ACCESSIBILITY / MOBILE SCROLL BEHAVIOR
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .sidebar,
+  .modalCard,
+  .globalSearchPanel {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebarOverlay {
+    touch-action: none;
+  }
+
+  body:has(.sidebar.sidebarOpen) {
+    overflow: hidden;
+  }
+
+  .accountDropdown {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+}

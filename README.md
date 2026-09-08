@@ -1,183 +1,336 @@
-# 🖨️ Cyber Cafe Helper
+# 🖨️ CyberCafe Helper
 
-> A QR-powered print management system built for modern cyber cafés.
+> A QR-powered print management and cyber café operations platform built for modern cyber cafés.
 
-Cyber Cafe Helper simplifies the process of receiving and managing customer print requests.
+CyberCafe Helper makes it easier for cyber café owners to receive, organize, and process customer print requests.
 
-Instead of customers sending documents through WhatsApp, email, or repeatedly connecting their phones to a computer, each cyber café gets its own **unique QR code**. Customers scan the QR code, upload their documents, choose their print requirements, and submit the job.
+Instead of customers sending documents through WhatsApp, email, or repeatedly connecting their phones to a computer, each café gets a **café-specific QR code**.
 
-The café owner receives the request directly in the **owner dashboard** and can manage the print queue from one place.
+Customers scan the QR code → upload their documents → choose print requirements → submit the request.
 
-🔗 **Live Demo:** https://cybercafe-helper.vercel.app/
-
----
-
-## ✨ Features
-
-### 📱 Customer Print Flow
-
-* Scan a café-specific QR code
-* Upload documents directly from a phone
-* Support for common document/image formats
-* Specify printing requirements
-* Submit a print request without creating an account
-* Receive a simple, mobile-friendly experience
-
-### 🖥️ Owner Dashboard
-
-* View incoming print requests
-* Manage the print queue
-* Review uploaded documents
-* Track print-job status
-* Manage café/workspace information
-* Centralized dashboard for day-to-day operations
-
-### 🔐 Authentication & Workspaces
-
-* Secure user authentication
-* Workspace-based architecture
-* Owner/admin access control
-* Workspace-specific QR identification
-* Data isolation between cafés
-
-### 🤖 AI-Powered Functionality
-
-* AI-assisted features integrated into the application
-* Designed to reduce repetitive work for cyber café operators
-
-### 💳 Billing Infrastructure
-
-* Pro subscription plan infrastructure
-* Razorpay integration
-* Subscription creation and verification flow
-* Test-mode payment integration
-
-> Recurring subscription activation is currently dependent on Razorpay's Test Mode card-mandate processing and is intentionally not a blocker for the deployed V1 application.
+The café owner receives the request directly in the **owner dashboard**, where they can review documents, manage the print queue, track customers, schedule follow-ups, and manage day-to-day café operations.
 
 ---
 
-## 🔄 How It Works
+## 🚀 Live Application
+
+**Live Demo:** https://www.cybercafehelper.in/
+
+**GitHub:** https://github.com/Uttam888/cybercafe-helper
+
+---
+
+## ✨ Key Features
+
+### 📱 QR-Based Customer Print Flow
+
+Customers can submit print requests directly from their phones without creating an account.
+
+- Scan a café-specific QR code
+- Upload documents or images
+- Enter customer details
+- Select print requirements
+- Choose B&W or color printing
+- Select paper size
+- Select number of copies
+- Enable duplex printing
+- Add notes for the café operator
+- Submit the print request
+
+The customer does not need access to the café's computer or messaging applications.
+
+---
+
+### 🖨️ Print Job Management
+
+Café operators get a centralized print queue inside the dashboard.
+
+- View incoming print requests
+- Review customer information
+- Open uploaded documents securely
+- Accept or reject requests
+- Track printing progress
+- Mark completed jobs
+- Track pending and completed work
+- View print specifications
+- Manage multiple print jobs from one place
+
+### Print Job Lifecycle
 
 ```text
-                    ┌──────────────────┐
-                    │    Cyber Café    │
-                    │      Owner       │
-                    └────────┬─────────┘
-                             │
-                             │ Generates / displays
-                             │ café-specific QR
-                             ▼
-                    ┌──────────────────┐
-                    │   Café QR Code   │
-                    └────────┬─────────┘
-                             │
-                         Customer
-                           scans
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │ Customer Upload  │
-                    │    & Request     │
-                    └────────┬─────────┘
-                             │
-                       Print Job
-                       submitted
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │  Owner Dashboard │
-                    │                  │
-                    │   Print Queue    │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │  Print / Process │
-                    │      Job         │
-                    └──────────────────┘
-```
-
-### Typical print-job lifecycle
-
-```text
-Submitted
-    ↓
+Pending
+   ↓
 Accepted
-    ↓
+   ↓
 Printing
-    ↓
-Ready
-```
+   ↓
+Completed
 
----
+Jobs can also be rejected when necessary.
 
-## 🏗️ Architecture
+👥 Customer Management
 
-Cyber Cafe Helper uses a modern web application architecture:
+The application maintains customer information associated with the café workspace.
 
-```text
-┌───────────────────────────────────────────┐
-│                  Customer                 │
-│              Mobile Browser               │
-└─────────────────────┬─────────────────────┘
-                      │
-                      │ QR Code
-                      ▼
-┌───────────────────────────────────────────┐
-│             React + Vite Frontend         │
-│                                           │
-│  Customer Flow │ Owner Dashboard │ Auth  │
-└─────────────────────┬─────────────────────┘
-                      │
-                      ▼
-┌───────────────────────────────────────────┐
-│                  Supabase                 │
-│                                           │
-│  Authentication │ Database │ Storage      │
-│                                           │
-│             Edge Functions                │
-└─────────────────────┬─────────────────────┘
-                      │
-                      ▼
-┌───────────────────────────────────────────┐
-│          External Integrations            │
-│                                           │
-│              Razorpay                    │
-└───────────────────────────────────────────┘
-```
+Customer records
+Customer contact information
+Customer print activity
+Workspace-specific customer access
+Customer history for operational use
 
----
+This gives café operators a foundation for managing repeat customers rather than treating every print request as an isolated transaction.
 
-## 🛠️ Tech Stack
+🤖 AI-Powered Operations
 
-### Frontend
+CyberCafe Helper includes AI-assisted functionality designed to reduce repetitive work for café operators.
 
-* **React**
-* **Vite**
-* **JavaScript**
-* **CSS**
+The application uses AI for operational intelligence and customer-related assistance, allowing the dashboard to provide more useful information than a basic CRUD application.
 
-### Backend & Infrastructure
+AI functionality is integrated through server-side application logic rather than exposing sensitive credentials in the browser.
 
-* **Supabase**
-* Supabase Authentication
-* PostgreSQL database
-* Supabase Storage
-* Supabase Edge Functions
+📅 Follow-Ups
 
-### Payments
+The dashboard supports customer follow-up workflows.
 
-* **Razorpay**
+Operators can:
 
-### Deployment
+Schedule follow-ups
+Track follow-up status
+Manage customer-related reminders
+Keep important customer interactions organized
 
-* **Vercel**
+This helps extend the application beyond simple print-job management.
 
----
+💰 Earnings & Business Tracking
 
-## 📂 Project Structure
+The application includes operational earnings functionality for tracking printing revenue.
 
-```text
+Supported pricing includes:
+
+Service	Price
+A4 B&W	₹2
+A4 Color	₹10
+A3 B&W	₹4
+A3 Color	₹20
+Duplex	10% discount
+
+The system tracks actual paid amounts and outstanding amounts rather than relying only on static estimates.
+
+🔗 Quick Links & Café Tools
+
+The dashboard provides quick access to frequently used resources and café-specific links.
+
+This allows operators to keep common services and resources organized within the application instead of maintaining separate browser bookmarks.
+
+🏢 Workspace Architecture
+
+CyberCafe Helper is designed as a multi-workspace application.
+
+Each café operates within its own workspace with workspace-specific:
+
+Customers
+Print jobs
+QR identification
+Quick links
+Services
+Operational data
+
+Workspace access is controlled through authenticated membership and role-based permissions.
+
+👤 Authentication & Roles
+
+The application supports authenticated users and workspace-based authorization.
+
+The architecture supports roles such as:
+
+Owner
+Admin
+Staff
+
+Access to operational data is restricted according to workspace membership and permissions.
+
+💳 Subscription & Billing Infrastructure
+
+The application includes subscription infrastructure using Razorpay.
+
+Implemented functionality includes:
+
+Subscription creation
+Subscription verification
+Payment integration
+Webhook processing
+Payment records
+Pro subscription infrastructure
+
+The production V1 currently focuses on the core café workflow while payment functionality continues to operate through the configured Razorpay environment.
+
+🔄 How It Works
+                    ┌─────────────────────┐
+                    │     Café Owner      │
+                    │       Dashboard     │
+                    └──────────┬──────────┘
+                               │
+                               │ Café QR
+                               ▼
+                    ┌─────────────────────┐
+                    │    Café QR Code     │
+                    └──────────┬──────────┘
+                               │
+                          Customer scans
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Customer Web App  │
+                    │                     │
+                    │ Upload + Print      │
+                    │ Requirements        │
+                    └──────────┬──────────┘
+                               │
+                          Print Request
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │    Print Queue      │
+                    │                     │
+                    │ Pending → Accepted  │
+                    │ → Printing          │
+                    │ → Completed         │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Café Operator     │
+                    │   Processes Job     │
+                    └─────────────────────┘
+Customer Experience
+Scan QR
+   ↓
+Open café page
+   ↓
+Enter details
+   ↓
+Upload documents
+   ↓
+Select print requirements
+   ↓
+Submit
+Owner Experience
+Receive request
+   ↓
+Review print job
+   ↓
+Open document securely
+   ↓
+Accept / Reject
+   ↓
+Print
+   ↓
+Mark completed
+🏗️ Architecture
+
+CyberCafe Helper uses a modern client + backend-as-a-service architecture.
+
+┌──────────────────────────────────────────────┐
+│                 Customers                    │
+│              Mobile Browsers                │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │ QR Code
+                       ▼
+┌──────────────────────────────────────────────┐
+│             React + Vite Frontend            │
+│                                              │
+│ Customer Flow │ Dashboard │ Auth │ Settings  │
+└──────────────────────┬───────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────┐
+│                  Supabase                    │
+│                                              │
+│ Authentication                              │
+│ PostgreSQL                                   │
+│ Storage                                      │
+│ Row Level Security                           │
+│ Edge Functions                               │
+└──────────────────────┬───────────────────────┘
+                       │
+              ┌────────┴─────────┐
+              ▼                  ▼
+┌──────────────────────┐  ┌───────────────────┐
+│ Server-side Services │  │ External Services │
+│                      │  │                   │
+│ AI Functions         │  │ Razorpay          │
+│ Print Processing     │  │                   │
+│ Secure File Access   │  │                   │
+└──────────────────────┘  └───────────────────┘
+🔐 Security
+
+Security was treated as a core part of the application rather than an afterthought.
+
+Row Level Security
+
+Supabase PostgreSQL tables use Row Level Security (RLS) to enforce workspace-level data isolation.
+
+Users should only be able to access data belonging to workspaces they are authorized to access.
+
+Private Document Storage
+
+Customer-uploaded print documents are stored in a private Supabase Storage bucket.
+
+Documents are not exposed through permanent public URLs.
+
+When an authorized café operator requests a document, the backend generates a temporary signed URL.
+
+Owner
+  ↓
+Authenticated Request
+  ↓
+Edge Function
+  ↓
+Verify Workspace Membership
+  ↓
+Generate Temporary Signed URL
+  ↓
+Open Private Document
+Server-Side Secrets
+
+Sensitive credentials such as:
+
+Supabase service-role credentials
+Razorpay secrets
+Webhook secrets
+AI API credentials
+
+are kept server-side and are never intended to be exposed through the frontend.
+
+Rate Limiting
+
+The public print submission endpoint includes rate limiting to reduce abuse.
+
+The submission endpoint uses Redis-backed request limiting with separate short-term and rolling request limits.
+
+🛠️ Tech Stack
+Frontend
+React
+Vite
+JavaScript
+CSS
+Backend
+Supabase
+PostgreSQL
+Supabase Authentication
+Supabase Storage
+Supabase Edge Functions
+Row Level Security
+AI
+Google Gemini
+Payments
+Razorpay
+Rate Limiting
+Upstash Redis
+Deployment
+Vercel
+📂 Project Structure
 cybercafe-helper/
 │
 ├── src/
@@ -191,128 +344,175 @@ cybercafe-helper/
 ├── package.json
 ├── package-lock.json
 ├── .gitignore
+├── vercel.json
 └── README.md
-```
 
----
+Backend functionality is implemented through Supabase Edge Functions.
 
-## 🚀 Getting Started
-
-### Prerequisites
+🚀 Getting Started
+Prerequisites
 
 Make sure you have:
 
-* Node.js installed
-* npm installed
-* A Supabase project
+Node.js
+npm
+A Supabase project
+1. Clone the repository
+git clone https://github.com/Uttam888/cybercafe-helper.git
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/cybercafe-helper.git
 cd cybercafe-helper
-```
-
-### 2. Install dependencies
-
-```bash
+2. Install dependencies
 npm install
-```
+3. Configure environment variables
 
-### 3. Configure environment variables
+Create a .env file in the project root:
 
-Create a `.env` file in the project root:
-
-```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
-```
-
-### 4. Start the development server
-
-```bash
+4. Start the development server
 npm run dev
-```
 
 The application will be available at the local Vite development URL.
 
-### 5. Build for production
-
-```bash
+5. Build for production
 npm run build
-```
-
----
-
-## 🔐 Environment Variables
+🔑 Environment Variables
 
 The frontend requires:
 
-| Variable                        | Description                   |
-| ------------------------------- | ----------------------------- |
-| `VITE_SUPABASE_URL`             | Supabase project URL          |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable/anon key |
+Variable	Description
+VITE_SUPABASE_URL	Supabase project URL
+VITE_SUPABASE_PUBLISHABLE_KEY	Supabase publishable/anon key
+Important
 
-**Never commit secret credentials to GitHub.**
+Never commit secret credentials to GitHub.
 
-Server-side secrets such as Supabase service-role credentials and Razorpay secrets must remain inside the appropriate server-side environment.
+Server-side credentials and secrets should remain inside the appropriate server-side environment.
 
----
+Examples include:
 
-## 🎯 Product Goal
+SUPABASE_SERVICE_ROLE_KEY
+RAZORPAY_KEY_SECRET
+RAZORPAY_WEBHOOK_SECRET
+AI API credentials
+Redis credentials
 
-Cyber Cafe Helper is designed around a simple problem:
+The exact server-side configuration depends on the deployed Supabase Edge Functions.
 
-> **Customers shouldn't have to figure out how to get their documents onto a cyber café computer.**
+📱 Responsive Design
+
+The application is designed to work across:
+
+Desktop
+Laptop
+Tablet
+Mobile devices
+
+The customer QR flow is specifically designed around mobile usage, while the owner dashboard provides a responsive interface for café operators.
+
+🎯 Product Goal
+
+CyberCafe Helper is built around a simple problem:
+
+Customers shouldn't have to figure out how to get their documents onto a cyber café computer.
 
 A QR code turns the café's physical location into a simple digital entry point.
 
-The customer scans → uploads → submits.
+Customer
 
-The owner receives → reviews → prints.
+Scan
+  ↓
+Upload
+  ↓
+Submit
+Café
 
-The goal is to make everyday cyber café operations faster, simpler, and more organized.
+Receive
+  ↓
+Review
+  ↓
+Print
+  ↓
+Complete
 
----
+The broader goal is to turn common cyber café workflows into a centralized digital operating system.
 
-## 📌 Project Status
+🧠 Engineering Highlights
 
-**V1 — Live**
+This project demonstrates practical experience with:
 
-The current V1 application is deployed and operational.
+React application architecture
+Vite-based frontend development
+Responsive UI design
+Supabase integration
+PostgreSQL database design
+Row Level Security
+Authentication and authorization
+Workspace-based multi-tenant architecture
+Role-based access control
+Private file storage
+Temporary signed URLs
+Serverless Edge Functions
+QR-based workflows
+Public-to-authenticated workflow boundaries
+AI integration
+Payment integration
+Webhook processing
+Redis-backed rate limiting
+Production deployment
+SaaS-style application architecture
 
-🔗 **Live Application:** https://cybercafe-helper.vercel.app/
+The project also required designing secure boundaries between:
 
-The project is currently focused on the core customer print-request and café management workflow.
+Public Customer
+       ↓
+Public QR Workflow
+       ↓
+Backend Validation
+       ↓
+Workspace
+       ↓
+Authorized Operator
+       ↓
+Private Documents
+📌 Project Status
+V1 — Live
 
----
+CyberCafe Helper V1 is deployed and operational.
 
-## 🧠 What This Project Demonstrates
+Live Application:
 
-Cyber Cafe Helper demonstrates practical experience with:
+https://cybercafe-helper.vercel.app/
 
-* React application development
-* Vite-based frontend architecture
-* Supabase integration
-* Authentication
-* PostgreSQL-backed application design
-* File uploads and storage
-* Role-based workspace access
-* QR-based workflows
-* Serverless Edge Functions
-* Third-party API integration
-* Payment integration
-* Production deployment with Vercel
-* SaaS-style product architecture
+The current version focuses on:
 
----
+QR-based print requests
+Print queue management
+Customer management
+Workspace-based operations
+AI-assisted functionality
+Follow-ups
+Earnings tracking
+Secure document access
+Subscription infrastructure
 
-## 📄 License
+The application is being developed iteratively as a production-oriented SaaS project.
+
+🗺️ Future Improvements
+
+Potential future improvements include:
+
+More advanced café analytics
+Printer/device integration
+Automated print-cost calculation
+Additional payment workflows
+Expanded AI automation
+Improved operational reporting
+Additional customer self-service features
+Native mobile experience
+📄 License
 
 This project is currently maintained as a personal software project.
 
----
+<p align="center"> Built with ❤️ for the next generation of cyber cafés. </p> 
 
-<p align="center">
-  Built with ❤️ for the next generation of cyber cafés.
-</p>

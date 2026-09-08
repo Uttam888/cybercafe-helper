@@ -3458,28 +3458,97 @@ function PrintJobsPage({ workspace }) {
     }
   };
 
-  const downloadFile = async (file) => {
-    try {
-      setBusyId(file.id);
-      setError("");
+ const downloadFile = async (file) => {
+  const newWindow = window.open("about:blank", "_blank");
 
-      const { data, error } = await supabase.functions.invoke("get-print-file-url", {
-        body: { fileId: file.id },
-      });
+  try {
+    setBusyId(file.id);
+    setError("");
 
-      if (error) throw error;
-      if (!data?.signedUrl) {
-        throw new Error(data?.error || "Could not create a secure file URL.");
-      }
-
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      console.error("Print file download failed:", err);
-      setError(getSafeUiError(err, "Could not open the file."));
-    } finally {
-      setBusyId("");
+    if (!newWindow) {
+      throw new Error(
+        "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
+      );
     }
-  };
+
+    newWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Opening document…</title>
+          <style>
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-family: Arial, sans-serif;
+              background: #f8fafc;
+              color: #334155;
+            }
+
+            .box {
+              text-align: center;
+              padding: 24px;
+            }
+
+            .spinner {
+              width: 32px;
+              height: 32px;
+              margin: 0 auto 16px;
+              border: 3px solid #e2e8f0;
+              border-top-color: #475569;
+              border-radius: 50%;
+              animation: spin 0.8s linear infinite;
+            }
+
+            @keyframes spin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <div class="spinner"></div>
+            <div>Opening document…</div>
+          </div>
+        </body>
+      </html>
+    `);
+
+    newWindow.document.close();
+
+    const { data, error } = await supabase.functions.invoke(
+      "get-print-file-url",
+      {
+        body: { fileId: file.id },
+      }
+    );
+
+    if (error) throw error;
+
+    if (!data?.signedUrl) {
+      throw new Error(
+        data?.error || "Could not create a secure file URL."
+      );
+    }
+
+    newWindow.location.href = data.signedUrl;
+  } catch (err) {
+    console.error("Print file download failed:", err);
+
+    if (newWindow && !newWindow.closed) {
+      newWindow.close();
+    }
+
+    setError(getSafeUiError(err, "Could not open the file."));
+  } finally {
+    setBusyId("");
+  }
+};
 
   const counts = {
     all: jobs.length,
