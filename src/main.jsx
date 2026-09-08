@@ -3462,16 +3462,16 @@ function PrintJobsPage({ workspace }) {
   const newWindow = window.open("about:blank", "_blank");
 
   try {
-    setBusyId(file.id);
-    setError("");
+   setBusyId(file.id);
+   setError("");
 
-    if (!newWindow) {
-      throw new Error(
-        "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
-      );
-    }
+   if (!newWindow) {
+    throw new Error(
+      "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
+    );
+   }
 
-    newWindow.document.write(`
+   newWindow.document.write(`
       <!doctype html>
       <html>
         <head>
@@ -3521,10 +3521,39 @@ function PrintJobsPage({ workspace }) {
 
     newWindow.document.close();
 
+    // Explicitly obtain the current authenticated session so the
+    // Edge Function receives the bearer token in production.
+    let {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    // If the access token is unavailable, refresh the session.
+    if (!session?.access_token) {
+      const refreshResult = await supabase.auth.refreshSession();
+
+      if (refreshResult.error) {
+        throw refreshResult.error;
+      }
+
+      session = refreshResult.data.session;
+    }
+
+    if (!session?.access_token) {
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+
     const { data, error } = await supabase.functions.invoke(
       "get-print-file-url",
       {
         body: { fileId: file.id },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       }
     );
 
