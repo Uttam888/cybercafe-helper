@@ -3458,126 +3458,97 @@ function PrintJobsPage({ workspace }) {
     }
   };
 
- const downloadFile = async (file) => {
-  const newWindow = window.open("about:blank", "_blank");
+  const downloadFile = async (file) => {
+    const newWindow = window.open("about:blank", "_blank");
 
-  try {
-   setBusyId(file.id);
-   setError("");
+    try {
+      setBusyId(file.id);
+      setError("");
 
-   if (!newWindow) {
-    throw new Error(
-      "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
-    );
-   }
+      if (!newWindow) {
+        throw new Error(
+          "Your browser blocked the document window. Please allow pop-ups for CyberCafe Helper."
+        );
+      }
 
-   newWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>Opening document…</title>
-          <style>
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: Arial, sans-serif;
-              background: #f8fafc;
-              color: #334155;
-            }
-
-            .box {
-              text-align: center;
-              padding: 24px;
-            }
-
-            .spinner {
-              width: 32px;
-              height: 32px;
-              margin: 0 auto 16px;
-              border: 3px solid #e2e8f0;
-              border-top-color: #475569;
-              border-radius: 50%;
-              animation: spin 0.8s linear infinite;
-            }
-
-            @keyframes spin {
-              to {
-                transform: rotate(360deg);
+      newWindow.document.write(`
+        <html>
+          <head>
+            <title>Opening document...</title>
+            <style>
+              body {
+                margin: 0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: Arial, sans-serif;
+                color: #475569;
+                background: #f8fafc;
               }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="box">
-            <div class="spinner"></div>
+            </style>
+          </head>
+          <body>
             <div>Opening document…</div>
-          </div>
-        </body>
-      </html>
-    `);
+          </body>
+        </html>
+      `);
+      newWindow.document.close();
 
-    newWindow.document.close();
+      let {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    // Explicitly obtain the current authenticated session so the
-    // Edge Function receives the bearer token in production.
-    let {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      throw sessionError;
-    }
-
-    // If the access token is unavailable, refresh the session.
-    if (!session?.access_token) {
-      const refreshResult = await supabase.auth.refreshSession();
-
-      if (refreshResult.error) {
-        throw refreshResult.error;
+      if (sessionError) {
+        throw sessionError;
       }
 
-      session = refreshResult.data.session;
-    }
+      if (!session?.access_token) {
+        const refreshResult = await supabase.auth.refreshSession();
 
-    if (!session?.access_token) {
-      throw new Error("Your session has expired. Please sign in again.");
-    }
+        if (refreshResult.error) {
+          throw refreshResult.error;
+        }
 
-    const { data, error } = await supabase.functions.invoke(
-      "get-print-file-url",
-      {
-        body: { fileId: file.id },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        session = refreshResult.data.session;
       }
-    );
 
-    if (error) throw error;
+      if (!session?.access_token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
 
-    if (!data?.signedUrl) {
-      throw new Error(
-        data?.error || "Could not create a secure file URL."
+      const { data, error } = await supabase.functions.invoke(
+        "get-print-file-url",
+        {
+          body: { fileId: file.id },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
       );
+
+      if (error) throw error;
+
+      if (!data?.signedUrl) {
+        throw new Error(
+          data?.error || "Could not create a secure file URL."
+        );
+      }
+
+      newWindow.location.href = data.signedUrl;
+    } catch (err) {
+      console.error("Print file download failed:", err);
+
+      if (newWindow && !newWindow.closed) {
+        newWindow.close();
+      }
+
+      setError(getSafeUiError(err, "Could not open the file."));
+    } finally {
+      setBusyId("");
     }
-
-    newWindow.location.href = data.signedUrl;
-  } catch (err) {
-    console.error("Print file download failed:", err);
-
-    if (newWindow && !newWindow.closed) {
-      newWindow.close();
-    }
-
-    setError(getSafeUiError(err, "Could not open the file."));
-  } finally {
-    setBusyId("");
-  }
-};
+  };
 
   const counts = {
     all: jobs.length,
